@@ -1,0 +1,31 @@
+{
+  "leoHeader": {
+    "fileFormat": 2
+  },
+  "vnodes": [
+    {
+      "gnx": "felix.20241113233438.1",
+      "vh": "Introduction"
+    },
+    {
+      "gnx": "felix.20241113233458.1",
+      "vh": "@clean src/main.ts",
+      "children": [
+        {
+          "gnx": "felix.20241113235415.1",
+          "vh": "gl sources"
+        },
+        {
+          "gnx": "felix.20241113235430.1",
+          "vh": "test"
+        }
+      ]
+    }
+  ],
+  "tnodes": {
+    "felix.20241113233438.1": "Andrew Adamson WebGL tutorials\n\nhttps://www.youtube.com/watch?v=-T6EbWCq99c&list=PLPbmjY2NVO_X1U1JzLxLDdRn4NmtxyQQo\n\n",
+    "felix.20241113233458.1": "@others\n",
+    "felix.20241113235415.1": "const vertexShaderSource = /*glsl*/ `#version 300 es\n\nvoid main()\n{\n    gl_Position = vec4(0.0, 0.0, 0.0, 1.0);\n    gl_PointSize = 150.0;\n}`;\n\nconst fragmentShaderSource = /*glsl*/ `#version 300 es\n\nprecision mediump float;\n\nout vec4 fragColor;\n\nvoid main()\n{\n    fragColor = vec4(1.0, 0.0, 0.0, 1.0);\n}`;\n\n",
+    "felix.20241113235430.1": "// start\nconst canvas = document.querySelector('canvas')!;\nconst gl = canvas.getContext('webgl2')!;\n\nconst program = gl.createProgram()!;\n\nconst vertexShader = gl.createShader(gl.VERTEX_SHADER)!;\ngl.shaderSource(vertexShader, vertexShaderSource);\ngl.compileShader(vertexShader);\ngl.attachShader(program, vertexShader);\n\nconst fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;\ngl.shaderSource(fragmentShader, fragmentShaderSource);\ngl.compileShader(fragmentShader);\ngl.attachShader(program, fragmentShader);\n\ngl.linkProgram(program);\n\nif (!gl.getProgramParameter(program, gl.LINK_STATUS)) {\n    console.log(gl.getShaderInfoLog(vertexShader));\n    console.log(gl.getShaderInfoLog(fragmentShader));\n    console.log(gl.getProgramInfoLog(program));\n}\n\ngl.useProgram(program);\n\ngl.drawArrays(gl.POINTS, 0, 1);\n"
+  }
+}
