@@ -1,23 +1,31 @@
+// VERTEX SHADER
 const vertexShaderSource = /*glsl*/ `#version 300 es
+
+uniform float uPointSize;
+uniform vec2 uPosition;
 
 void main()
 {
-    gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
-    gl_PointSize = 150.0;
+    gl_PointSize = uPointSize;
+    gl_Position = vec4(uPosition, 0.0, 1.0);
 }`;
 
+// FRAGMENT SHADER
 const fragmentShaderSource = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
 out vec4 fragColor;
 
+uniform int uIndex;
+uniform vec4 uColors[3];
+
 void main()
 {
-    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    fragColor = uColors[uIndex];
 }`;
 
-// start
+// Start
 const canvas = document.querySelector('canvas')!;
 const gl = canvas.getContext('webgl2')!;
 
@@ -42,5 +50,21 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 }
 
 gl.useProgram(program);
+
+const uPositionLoc = gl.getUniformLocation(program, 'uPosition')!;
+gl.uniform2f(uPositionLoc, -0.3, 0.0);
+
+const uPointSizeLoc = gl.getUniformLocation(program, 'uPointSize')!;
+gl.uniform1f(uPointSizeLoc, 100.0);
+
+const uIndexLoc = gl.getUniformLocation(program, 'uIndex')!;
+const uColorsLoc = gl.getUniformLocation(program, 'uColors')!;
+
+gl.uniform1i(uIndexLoc, 2);
+gl.uniform4fv(uColorsLoc, [
+    1.0, 0.0, 0.0, 1.0,
+    0.0, 1.0, 0.0, 1.0,
+    1.0, 0.0, 1.0, 1.0,
+]);
 
 gl.drawArrays(gl.POINTS, 0, 1);
