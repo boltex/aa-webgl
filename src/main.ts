@@ -1,13 +1,17 @@
 // VERTEX SHADER
 const vertexShaderSource = /*glsl*/ `#version 300 es
 
-uniform float uPointSize;
-uniform vec2 uPosition;
+layout(location = 1) in float aPointSize;
+layout(location = 0) in vec2 aPosition;
+layout(location = 2) in vec3 aColor;
+
+out vec3 vColor;
 
 void main()
 {
-    gl_PointSize = uPointSize;
-    gl_Position = vec4(uPosition, 0.0, 1.0);
+    vColor = aColor;
+    gl_PointSize = aPointSize;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
 }`;
 
 // FRAGMENT SHADER
@@ -15,14 +19,13 @@ const fragmentShaderSource = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
-out vec4 fragColor;
+in vec3 vColor;
 
-uniform int uIndex;
-uniform vec4 uColors[3];
+out vec4 fragColor;
 
 void main()
 {
-    fragColor = uColors[uIndex];
+    fragColor = vec4(vColor, 1.0);
 }`;
 
 // Start
@@ -51,20 +54,32 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 
 gl.useProgram(program);
 
-const uPositionLoc = gl.getUniformLocation(program, 'uPosition')!;
-gl.uniform2f(uPositionLoc, -0.3, 0.0);
+// Attributes
+const aPositionLoc = 0;
+const aPointSizeLoc = 1;
+const aColorLoc = 2;
 
-const uPointSizeLoc = gl.getUniformLocation(program, 'uPointSize')!;
-gl.uniform1f(uPointSizeLoc, 100.0);
+gl.enableVertexAttribArray(aPointSizeLoc);
+gl.enableVertexAttribArray(aPositionLoc);
+gl.enableVertexAttribArray(aColorLoc);
 
-const uIndexLoc = gl.getUniformLocation(program, 'uIndex')!;
-const uColorsLoc = gl.getUniformLocation(program, 'uColors')!;
-
-gl.uniform1i(uIndexLoc, 2);
-gl.uniform4fv(uColorsLoc, [
-    1.0, 0.0, 0.0, 1.0,
-    0.0, 1.0, 0.0, 1.0,
-    1.0, 0.0, 1.0, 1.0,
+// Buffer: position x, position y, and point size
+const bufferData = new Float32Array([
+    -0.3, 0.5, 100, 1, 0, 0,
+    0.3, -0.5, 10, 0, 1, 0,
+    0.8, 0.8, 50, 0, 0, 1
 ]);
+const buffer = gl.createBuffer()!;
 
-gl.drawArrays(gl.POINTS, 0, 1);
+// Bind buffer
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, bufferData, gl.STATIC_DRAW);
+
+// Bind attributes: Match the layout in the buffer data
+gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 6 * 4, 0);
+gl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 6 * 4, 2 * 4);
+gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+
+// gl.drawArrays(gl.POINTS, 0, 3);  // Points sizes controled by third value in buffer data
+// gl.drawArrays(gl.LINE_LOOP, 0, 3); // Will draw a triangle
+gl.drawArrays(gl.TRIANGLES, 0, 3); // Will draw a filled triangle

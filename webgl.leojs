@@ -8,12 +8,8 @@
       "vh": "Introduction"
     },
     {
-      "gnx": "felix.20241116150630.1",
-      "vh": "Notes"
-    },
-    {
-      "gnx": "felix.20241113233458.1",
-      "vh": "@clean src/main.ts",
+      "gnx": "felix.20241116232514.1",
+      "vh": "Chapter3 Uniforms",
       "children": [
         {
           "gnx": "felix.20241113235415.1",
@@ -21,16 +17,42 @@
         },
         {
           "gnx": "felix.20241113235430.1",
-          "vh": "test"
+          "vh": "main"
+        }
+      ]
+    },
+    {
+      "gnx": "felix.20241116232737.1",
+      "vh": "Chapter4 Attributes",
+      "children": [
+        {
+          "gnx": "felix.20241116232737.2",
+          "vh": "gl sources"
+        },
+        {
+          "gnx": "felix.20241116232737.3",
+          "vh": "main"
+        }
+      ]
+    },
+    {
+      "gnx": "felix.20241113233458.1",
+      "vh": "@clean src/main.ts",
+      "children": [
+        {
+          "gnx": "felix.20241116232737.1"
         }
       ]
     }
   ],
   "tnodes": {
     "felix.20241113233438.1": "Andrew Adamson WebGL tutorials\n\nhttps://www.youtube.com/watch?v=-T6EbWCq99c&list=PLPbmjY2NVO_X1U1JzLxLDdRn4NmtxyQQo\n\n",
-    "felix.20241116150630.1": "# WebGL Notes\n\n## Uniform\n\n## Attribute\n",
-    "felix.20241113233458.1": "@others\n",
+    "felix.20241116232514.1": "@others\n",
     "felix.20241113235415.1": "// VERTEX SHADER\nconst vertexShaderSource = /*glsl*/ `#version 300 es\n\nuniform float uPointSize;\nuniform vec2 uPosition;\n\nvoid main()\n{\n    gl_PointSize = uPointSize;\n    gl_Position = vec4(uPosition, 0.0, 1.0);\n}`;\n\n// FRAGMENT SHADER\nconst fragmentShaderSource = /*glsl*/ `#version 300 es\n\nprecision mediump float;\n\nout vec4 fragColor;\n\nuniform int uIndex;\nuniform vec4 uColors[3];\n\nvoid main()\n{\n    fragColor = uColors[uIndex];\n}`;\n\n",
-    "felix.20241113235430.1": "// Start\nconst canvas = document.querySelector('canvas')!;\nconst gl = canvas.getContext('webgl2')!;\n\nconst program = gl.createProgram()!;\n\nconst vertexShader = gl.createShader(gl.VERTEX_SHADER)!;\ngl.shaderSource(vertexShader, vertexShaderSource);\ngl.compileShader(vertexShader);\ngl.attachShader(program, vertexShader);\n\nconst fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;\ngl.shaderSource(fragmentShader, fragmentShaderSource);\ngl.compileShader(fragmentShader);\ngl.attachShader(program, fragmentShader);\n\ngl.linkProgram(program);\n\nif (!gl.getProgramParameter(program, gl.LINK_STATUS)) {\n    console.log(gl.getShaderInfoLog(vertexShader));\n    console.log(gl.getShaderInfoLog(fragmentShader));\n    console.log(gl.getProgramInfoLog(program));\n}\n\ngl.useProgram(program);\n\nconst uPositionLoc = gl.getUniformLocation(program, 'uPosition')!;\ngl.uniform2f(uPositionLoc, -0.3, 0.0);\n\nconst uPointSizeLoc = gl.getUniformLocation(program, 'uPointSize')!;\ngl.uniform1f(uPointSizeLoc, 100.0);\n\nconst uIndexLoc = gl.getUniformLocation(program, 'uIndex')!;\nconst uColorsLoc = gl.getUniformLocation(program, 'uColors')!;\n\ngl.uniform1i(uIndexLoc, 2);\ngl.uniform4fv(uColorsLoc, [\n    1.0, 0.0, 0.0, 1.0,\n    0.0, 1.0, 0.0, 1.0,\n    1.0, 0.0, 1.0, 1.0,\n]);\n\ngl.drawArrays(gl.POINTS, 0, 1);\n"
+    "felix.20241113235430.1": "// Start\nconst canvas = document.querySelector('canvas')!;\nconst gl = canvas.getContext('webgl2')!;\n\nconst program = gl.createProgram()!;\n\nconst vertexShader = gl.createShader(gl.VERTEX_SHADER)!;\ngl.shaderSource(vertexShader, vertexShaderSource);\ngl.compileShader(vertexShader);\ngl.attachShader(program, vertexShader);\n\nconst fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;\ngl.shaderSource(fragmentShader, fragmentShaderSource);\ngl.compileShader(fragmentShader);\ngl.attachShader(program, fragmentShader);\n\ngl.linkProgram(program);\n\nif (!gl.getProgramParameter(program, gl.LINK_STATUS)) {\n    console.log(gl.getShaderInfoLog(vertexShader));\n    console.log(gl.getShaderInfoLog(fragmentShader));\n    console.log(gl.getProgramInfoLog(program));\n}\n\ngl.useProgram(program);\n\n// VERTEX SHADER -> Get position and pont size uniforms locations and set their values\nconst uPositionLoc = gl.getUniformLocation(program, 'uPosition')!;\ngl.uniform2f(uPositionLoc, -0.3, 0.0);\n\nconst uPointSizeLoc = gl.getUniformLocation(program, 'uPointSize')!;\ngl.uniform1f(uPointSizeLoc, 100.0);\n\n// FRAGMENT SHADER -> Get index and colors uniforms locations and set their values\nconst uIndexLoc = gl.getUniformLocation(program, 'uIndex')!;\nconst uColorsLoc = gl.getUniformLocation(program, 'uColors')!;\n\ngl.uniform1i(uIndexLoc, 2);\ngl.uniform4fv(uColorsLoc, [\n    1.0, 0.0, 0.0, 1.0,\n    0.0, 1.0, 0.0, 1.0,\n    1.0, 0.0, 1.0, 1.0,\n]);\n\ngl.drawArrays(gl.POINTS, 0, 1);\n",
+    "felix.20241116232737.1": "@others\n",
+    "felix.20241116232737.2": "// VERTEX SHADER\nconst vertexShaderSource = /*glsl*/ `#version 300 es\n\nlayout(location = 1) in float aPointSize;\nlayout(location = 0) in vec2 aPosition;\nlayout(location = 2) in vec3 aColor;\n\nout vec3 vColor;\n\nvoid main()\n{\n    vColor = aColor;\n    gl_PointSize = aPointSize;\n    gl_Position = vec4(aPosition, 0.0, 1.0);\n}`;\n\n// FRAGMENT SHADER\nconst fragmentShaderSource = /*glsl*/ `#version 300 es\n\nprecision mediump float;\n\nin vec3 vColor;\n\nout vec4 fragColor;\n\nvoid main()\n{\n    fragColor = vec4(vColor, 1.0);\n}`;\n\n",
+    "felix.20241116232737.3": "// Start\nconst canvas = document.querySelector('canvas')!;\nconst gl = canvas.getContext('webgl2')!;\n\nconst program = gl.createProgram()!;\n\nconst vertexShader = gl.createShader(gl.VERTEX_SHADER)!;\ngl.shaderSource(vertexShader, vertexShaderSource);\ngl.compileShader(vertexShader);\ngl.attachShader(program, vertexShader);\n\nconst fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;\ngl.shaderSource(fragmentShader, fragmentShaderSource);\ngl.compileShader(fragmentShader);\ngl.attachShader(program, fragmentShader);\n\ngl.linkProgram(program);\n\nif (!gl.getProgramParameter(program, gl.LINK_STATUS)) {\n    console.log(gl.getShaderInfoLog(vertexShader));\n    console.log(gl.getShaderInfoLog(fragmentShader));\n    console.log(gl.getProgramInfoLog(program));\n}\n\ngl.useProgram(program);\n\n// Attributes\nconst aPositionLoc = 0;\nconst aPointSizeLoc = 1;\nconst aColorLoc = 2;\n\ngl.enableVertexAttribArray(aPointSizeLoc);\ngl.enableVertexAttribArray(aPositionLoc);\ngl.enableVertexAttribArray(aColorLoc);\n\n// Buffer: position x, position y, and point size\nconst bufferData = new Float32Array([\n    -0.3, 0.5, 100, 1, 0, 0,\n    0.3, -0.5, 10, 0, 1, 0,\n    0.8, 0.8, 50, 0, 0, 1\n]);\nconst buffer = gl.createBuffer()!;\n\n// Bind buffer\ngl.bindBuffer(gl.ARRAY_BUFFER, buffer);\ngl.bufferData(gl.ARRAY_BUFFER, bufferData, gl.STATIC_DRAW);\n\n// Bind attributes: Match the layout in the buffer data\ngl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 6 * 4, 0);\ngl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 6 * 4, 2 * 4);\ngl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 6 * 4, 3 * 4);\n\n// gl.drawArrays(gl.POINTS, 0, 3);  // Points sizes controled by third value in buffer data\n// gl.drawArrays(gl.LINE_LOOP, 0, 3); // Will draw a triangle\ngl.drawArrays(gl.TRIANGLES, 0, 3); // Will draw a filled triangle\n",
+    "felix.20241113233458.1": "@others\n"
   }
 }
