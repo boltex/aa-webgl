@@ -59,9 +59,9 @@ const aPositionLoc = 0;
 const aPointSizeLoc = 1;
 const aColorLoc = 2;
 
-gl.enableVertexAttribArray(aPointSizeLoc);
-gl.enableVertexAttribArray(aPositionLoc);
-gl.enableVertexAttribArray(aColorLoc);
+gl.vertexAttrib4f(aPositionLoc, 0, 0, 0, 1); // DEFAULT LOCATION
+gl.vertexAttrib1f(aPointSizeLoc, 50); // DEFAULT POINT SIZE
+gl.vertexAttrib4f(aColorLoc, 1, 0, 0, 1); // DEFAULT COLOR (RED)
 
 // Buffer: position x, position y, and point size
 const bufferData = new Float32Array([
@@ -80,6 +80,11 @@ gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 6 * 4, 0);
 gl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 6 * 4, 2 * 4);
 gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
 
-// gl.drawArrays(gl.POINTS, 0, 3);  // Points sizes controled by third value in buffer data
+// Comment any of those 3 lines to see the effect of DEFAULTS above
+gl.enableVertexAttribArray(aPointSizeLoc);
+gl.enableVertexAttribArray(aPositionLoc);
+gl.enableVertexAttribArray(aColorLoc);
+
+gl.drawArrays(gl.POINTS, 0, 3);  // Points sizes controled by third value in buffer data
 // gl.drawArrays(gl.LINE_LOOP, 0, 3); // Will draw a triangle
-gl.drawArrays(gl.TRIANGLES, 0, 3); // Will draw a filled triangle
+// gl.drawArrays(gl.TRIANGLES, 0, 3); // Will draw a filled triangle
