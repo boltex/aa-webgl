@@ -63,22 +63,62 @@ gl.vertexAttrib4f(aPositionLoc, 0, 0, 0, 1); // DEFAULT LOCATION
 gl.vertexAttrib1f(aPointSizeLoc, 50); // DEFAULT POINT SIZE
 gl.vertexAttrib4f(aColorLoc, 1, 0, 0, 1); // DEFAULT COLOR (RED)
 
+// * ALL IN SAME BUFFER *
 // Buffer: position x, position y, and point size
-const bufferData = new Float32Array([
-    -0.3, 0.5, 100, 1, 0, 0,
-    0.3, -0.5, 10, 0, 1, 0,
-    0.8, 0.8, 50, 0, 0, 1
-]);
-const buffer = gl.createBuffer()!;
+// const bufferData = new Float32Array([
+//     -0.3, 0.5, 100, 1, 0, 0,
+//     0.3, -0.5, 10, 0, 1, 0,
+//     0.8, 0.8, 50, 0, 0, 1
+// ]);
+// const buffer = gl.createBuffer()!;
 
 // Bind buffer
-gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-gl.bufferData(gl.ARRAY_BUFFER, bufferData, gl.STATIC_DRAW);
+// gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+// gl.bufferData(gl.ARRAY_BUFFER, bufferData, gl.STATIC_DRAW);
 
 // Bind attributes: Match the layout in the buffer data
-gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 6 * 4, 0);
-gl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 6 * 4, 2 * 4);
-gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+// gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 6 * 4, 0);
+// gl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 6 * 4, 2 * 4);
+// gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+
+// * SEPARATE BUFFERS *
+const positionData = new Float32Array([
+    -0.3, 0.5,
+    0.3, -0.5,
+    0.8, 0.8
+]);
+const pointSizeData = new Float32Array([
+    100,
+    10,
+    50
+]);
+const colorData = new Float32Array([
+    1, 0, 0,
+    0, 1, 0,
+    0, 0, 1
+]);
+
+const positionBuffer = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, positionData, gl.STATIC_DRAW);
+
+const pointSizeBuffer = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, pointSizeData, gl.STATIC_DRAW);
+
+const colorBuffer = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, colorData, gl.STATIC_DRAW);
+
+
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 0, 0);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+gl.vertexAttribPointer(aPointSizeLoc, 1, gl.FLOAT, false, 0, 0);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 0, 0);
 
 // Comment any of those 3 lines to see the effect of DEFAULTS above
 gl.enableVertexAttribArray(aPointSizeLoc);
