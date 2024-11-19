@@ -76,8 +76,8 @@ const arrayVertexData = new Float32Array([
 
 ]);
 
-const arrayVertexBufferData = gl.createBuffer()!;
-gl.bindBuffer(gl.ARRAY_BUFFER, arrayVertexBufferData);
+const arrayVertexDataBuffer = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, arrayVertexDataBuffer);
 gl.bufferData(gl.ARRAY_BUFFER, arrayVertexData, gl.STATIC_DRAW);
 
 // For usage with drawElements
