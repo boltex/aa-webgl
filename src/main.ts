@@ -1,15 +1,17 @@
 // VERTEX SHADER
 const vertexShaderSource = /*glsl*/ `#version 300 es
 
-layout(location=0) in vec4 aPosition;
-layout(location=1) in vec2 aTexCoord;
+layout(location = 0) in float aPointSize;
+layout(location = 1) in vec2 aPosition;
+layout(location = 2) in vec3 aColor;
 
-out vec2 vTexCoord;
+out vec3 vColor;
 
 void main()
 {
-    vTexCoord = aTexCoord;
-    gl_Position = aPosition;
+    vColor = aColor;
+    gl_PointSize = aPointSize;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
 }`;
 
 // FRAGMENT SHADER
@@ -17,114 +19,125 @@ const fragmentShaderSource = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
-in vec2 vTexCoord;
+in vec3 vColor;
 
 out vec4 fragColor;
 
-uniform sampler2D uPixelSampler;
-uniform sampler2D uSpriteSampler;
-
 void main()
 {
-    // Sample demo mix of textures
-    fragColor = texture(uPixelSampler, vTexCoord) * texture(uSpriteSampler, vTexCoord);
+    fragColor = vec4(vColor, 1.0);
 }`;
 
-// Load image asynchronously
-function loadImage(src: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(image);
-        image.src = src;
-    });
+// Start
+const canvas = document.querySelector('canvas')!;
+const gl = canvas.getContext('webgl2')!;
+
+const program = gl.createProgram()!;
+
+const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
+gl.shaderSource(vertexShader, vertexShaderSource);
+gl.compileShader(vertexShader);
+gl.attachShader(program, vertexShader);
+
+const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
+gl.shaderSource(fragmentShader, fragmentShaderSource);
+gl.compileShader(fragmentShader);
+gl.attachShader(program, fragmentShader);
+
+gl.linkProgram(program);
+
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.log(gl.getShaderInfoLog(vertexShader));
+    console.log(gl.getShaderInfoLog(fragmentShader));
+    console.log(gl.getProgramInfoLog(program));
+    throw new Error('Failed to link program');
 }
 
-// Asynchronous IIFE
-(async () => {
-    const canvas = document.querySelector('canvas')!;
-    const gl = canvas.getContext('webgl2')!;
+gl.useProgram(program);
 
-    const program = gl.createProgram()!;
+const data1 = new Float32Array([
+    -0.8, 0.6, 1.0, 0.75, 0.75, 125,
+    -0.3, 0.6, 0.0, 0.75, 1.0, 32,
+    0.3, 0.6, 0.5, 1.0, 0.75, 75,
+    0.8, 0.6, 0.0, 0.75, 0.75, 9,
+]);
+const buffer1 = gl.createBuffer()!;
 
-    const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
-    gl.shaderSource(vertexShader, vertexShaderSource);
-    gl.compileShader(vertexShader);
-    gl.attachShader(program, vertexShader);
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
+gl.bufferData(gl.ARRAY_BUFFER, data1, gl.STATIC_DRAW);
 
-    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
-    gl.shaderSource(fragmentShader, fragmentShaderSource);
-    gl.compileShader(fragmentShader);
-    gl.attachShader(program, fragmentShader);
+// No need to bindBuffer inside of the VAO, because vertexAttribPointer will do it for us.
+const vao1 = gl.createVertexArray()!;
+gl.bindVertexArray(vao1);
 
-    gl.linkProgram(program);
+gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 24, 20);
+gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 24, 0);
+gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 8);
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.log(gl.getShaderInfoLog(vertexShader));
-        console.log(gl.getShaderInfoLog(fragmentShader));
-        console.log(gl.getProgramInfoLog(program));
-    }
+gl.enableVertexAttribArray(0);
+gl.enableVertexAttribArray(1);
+gl.enableVertexAttribArray(2);
 
-    gl.useProgram(program);
+gl.bindVertexArray(null); // Snapshot has been taken
 
-    const colors = new Uint8Array([
-        255, 255, 255, 142, 35, 344, 34, 127, 77, 127, 127, 127,
-        90, 212, 222, 43, 212, 122, 33, 22, 11, 213, 17, 78,
-        99, 88, 232, 22, 22, 11, 213, 111, 83, 211, 211, 22,
-        0, 0, 0, 244, 211, 231, 112, 112, 22, 73, 172, 243,
-    ]);
+const data2 = new Float32Array([
+    -0.8, -0.6, 1.0, 0.25, 0.25, 125,
+    -0.3, -0.6, 0.0, 0.25, 1.0, 32,
+    0.3, -0.6, 0.5, 1.0, 0.25, 75,
+    0.8, -0.6, 0.0, 0.25, 0.25, 9,
+]);
+const buffer2 = gl.createBuffer()!;
 
-    const image = await loadImage('images/sprite.png');
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
+gl.bufferData(gl.ARRAY_BUFFER, data2, gl.STATIC_DRAW);
 
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+// Again, no need bind second buffer inside of the VAO, because vertexAttribPointer will do it for us.
+const vao2 = gl.createVertexArray()!;
+gl.bindVertexArray(vao2);
 
-    const vertexBufferData = new Float32Array([
-        -0.9, -0.9,
-        0.0, 0.9,
-        0.9, -0.9,
-    ]);
+gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 24, 20); // 20 because last after 5*4
+gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 24, 0); // 0 because those x/y are at start
+gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 8); // 8 because after 2 * 4
 
-    const texCoordBufferData = new Float32Array([
-        0, 0,
-        0.5, 1,
-        1, 0,
-    ]);
+gl.enableVertexAttribArray(0);
+gl.enableVertexAttribArray(1);
+gl.enableVertexAttribArray(2);
 
-    const vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertexBufferData, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
+gl.bindVertexArray(null); // Another snapshot has been taken
 
-    const texCoordBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, texCoordBufferData, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(1);
+const draw = () => {
+    gl.bindVertexArray(vao1);
+    gl.drawArrays(gl.POINTS, 0, 4);
+    gl.bindVertexArray(null);
 
-    const pixelTextureUnit = 0;
-    const spriteTextureUnit = 5;
+    gl.bindVertexArray(vao2);
+    gl.drawArrays(gl.POINTS, 0, 4);
+    gl.bindVertexArray(null);
 
-    gl.uniform1i(gl.getUniformLocation(program, 'uPixelSampler'), pixelTextureUnit);
-    gl.uniform1i(gl.getUniformLocation(program, 'uSpriteSampler'), spriteTextureUnit);
+    requestAnimationFrame(draw);
+}
 
-    const pixelTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0 + pixelTextureUnit);
-    gl.bindTexture(gl.TEXTURE_2D, pixelTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 4, 4, 0, gl.RGB, gl.UNSIGNED_BYTE, colors);
-    // gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+draw();
 
-    const spriteTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0 + spriteTextureUnit);
-    gl.bindTexture(gl.TEXTURE_2D, spriteTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 32, 32, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    // gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+// gl.enableVertexAttribArray(0);
+// gl.enableVertexAttribArray(1);
+// gl.enableVertexAttribArray(2);
 
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+// gl.drawArrays(gl.POINTS, 0, 4); // Draw the second set of points
 
-})();
+// gl.flush(); // Simulate the next frame
+// gl.clear(gl.COLOR_BUFFER_BIT);
+
+// gl.bindBuffer(gl.ARRAY_BUFFER, buffer1); // Have to rebind the buffer
+// gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 24, 20);
+// gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 24, 0);
+// gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 8);
+
+// gl.drawArrays(gl.POINTS, 0, 4); // Draw the first set of points
+
+// gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
+// gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 24, 20);
+// gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 24, 0);
+// gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 8);
+
+// gl.drawArrays(gl.POINTS, 0, 4); // Draw the second set of points
