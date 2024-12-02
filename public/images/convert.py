@@ -15,8 +15,8 @@ output_image = Image.new('RGBA', (sprite_width, total_sprites * sprite_height))
 sprite_index = 0
 
 # Outside loops for 4x4 subsheets
-for sheet_x in range(4):
-    for sheet_y in range(4):
+for sheet_y in range(4):
+    for sheet_x in range(4):
 
         # Inside loops for individual sprites
         for y in range(0, 1024, sprite_height):
@@ -37,4 +37,4 @@ for sheet_x in range(4):
                 sprite_index += 1
 
 # Save the output image
-output_image.save('rearranged-spritesheet2.png')
+output_image.save('alien-vertical.png')
