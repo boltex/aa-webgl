@@ -3,15 +3,12 @@ const vertexShaderSource = /*glsl*/ `#version 300 es
 
 layout(location=0) in vec4 aPosition;
 layout(location=1) in vec2 aTexCoord;
-layout(location=2) in float aDepth;
 
 out vec2 vTexCoord;
-out float vDepth;
 
 void main()
 {
     vTexCoord = aTexCoord;
-    vDepth = aDepth;
     gl_Position = aPosition;
 }`;
 
@@ -20,16 +17,16 @@ const fragmentShaderSource = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
-uniform mediump sampler2DArray uSampler;
+uniform sampler2D uSampler;
 
 in vec2 vTexCoord;
-in float vDepth;
 
 out vec4 fragColor;
 
 void main()
 {
-    fragColor = texture(uSampler, vec3(vTexCoord, vDepth));
+    // Sample demo mix of textures
+    fragColor = texture(uSampler, vTexCoord);
 }`;
 
 // Load image asynchronously
@@ -38,16 +35,32 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         const image = new Image();
         image.onload = () => resolve(image);
         image.src = src;
-        console.log(image.width, image.height);
     });
+}
+
+function getSpriteUV(spriteNumber: number, orientation: number): [number, number, number, number, number, number, number, number, number, number, number, number] {
+    // 
+    const u = 0;
+    const v = 0;
+    const h = 64 / 4096;
+    const w = 64 / 4096;
+
+    return [
+        u, v + h,
+        u + w, v,
+        u, v,
+
+        u, v + h,
+        u + w, v + h,
+        u + w, v
+
+    ];
 }
 
 (async () => {
 
     const canvas = document.querySelector('canvas')!;
     const gl = canvas.getContext('webgl2')!;
-
-    console.log(gl.getParameter(gl.MAX_TEXTURE_SIZE));
 
     const program = gl.createProgram()!;
 
@@ -71,23 +84,68 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     gl.useProgram(program);
 
-    // * Start Program *
+    const positionData = new Float32Array([
+        // Quad 1
+        -1, 0,
+        0, 1,
+        -1, 1,
+        -1, 0,
+        0, 0,
+        0, 1,
+        // Quad 2
+        0, 0,
+        1, 1,
+        0, 1,
+        0, 0,
+        1, 0,
+        1, 1,
+        // Quad 3
+        -1, -1,
+        0, 0,
+        -1, 0,
+        -1, -1,
+        0, -1,
+        0, 0,
+        // Quad 4
+        0, -1,
+        1, 0,
+        0, 0,
+        0, -1,
+        1, -1,
+        1, 0,
+    ]);
 
-    // const image = await loadImage('images/alien-vertical.png');
-    const image = await loadImage('images/alien-vertical.png'); // TOO BIG !
+    const image = await loadImage('images/alien.png');
+
+    // Flip Y not needed?
+    // gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+    const positionBuffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positionData, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+
+    const texCoordData = new Float32Array(2 * 4 * 6);
+    const texCoordBuffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, texCoordData.byteLength, gl.DYNAMIC_DRAW);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
+
+    texCoordData.set(getSpriteUV(0, 0), 0);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, texCoordData);
 
     const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
-    gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA, 64, 64, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4096, 4096, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
 
     // Transparency
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     // Draw call
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.drawArrays(gl.TRIANGLES, 0, 24);
 
 })();
-
