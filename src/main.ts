@@ -38,12 +38,18 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     });
 }
 
-function getSpriteUV(spriteNumber: number, orientation: number): [number, number, number, number, number, number, number, number, number, number, number, number] {
-    // 
-    const u = 0;
-    const v = 0;
+function getSpriteUV(sprite: number, orientation: number): [number, number, number, number, number, number, number, number, number, number, number, number] {
+
     const h = 64 / 4096;
     const w = 64 / 4096;
+
+    // The sprite number (0 to 255) is the index of the 64x64 sprite in the 1024x1024 sprite sub-sheet
+    // The orientation is the index (0 to 15) of the 1024x1024 sprite sub-sheet in the 4096x4096 sprite sheet.
+
+    // Calculate in the 1024x1024 sprite sub-sheet and 
+    // add the offset of the 1024x1024 sprite sub-sheet in the 4096x4096 sprite sheet
+    const u = ((sprite % 16) * w) + (orientation % 4) * 0.25;
+    const v = (Math.floor(sprite / 16) * h) + Math.floor(orientation / 4) * 0.25;
 
     return [
         u, v + h,
@@ -133,7 +139,11 @@ function getSpriteUV(spriteNumber: number, orientation: number): [number, number
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(1);
 
-    texCoordData.set(getSpriteUV(0, 0), 0);
+    // Set texture
+    texCoordData.set(getSpriteUV(120, 15), 0);
+    texCoordData.set(getSpriteUV(120, 0), 12);
+    texCoordData.set(getSpriteUV(120, 1), 24);
+    texCoordData.set(getSpriteUV(120, 2), 36);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, texCoordData);
 
     const texture = gl.createTexture()!;
