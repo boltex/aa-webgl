@@ -1,7 +1,7 @@
 from PIL import Image
 
 # Load the sprite sheet image
-sprite_sheet = Image.open('alien.png')  # 4096x4096 pixels
+sprite_sheet = Image.open('public/images/alien.png')  # 4096x4096 pixels
 
 # Set sprite dimensions
 sprite_width = 64
@@ -37,4 +37,4 @@ for sheet_y in range(4):
                 sprite_index += 1
 
 # Save the output image
-output_image.save('alien-vertical.png')
+output_image.save('public/images/alien-vertical.png')
