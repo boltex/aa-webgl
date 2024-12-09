@@ -2,14 +2,22 @@
 const vertexShaderSource = /*glsl*/ `#version 300 es
 
 layout(location=0) in vec4 aPosition;
-layout(location=1) in vec2 aTexCoord;
+layout(location=1) in vec3 aOffset;
+layout(location=2) in float aScale;
+layout(location=3) in vec4 aColor;
+layout(location=4) in vec2 aTexCoord;
+layout(location=5) in float aDepth;
 
+out vec4 vColor;
 out vec2 vTexCoord;
+out float vDepth;
 
 void main()
 {
+    vColor = aColor;
     vTexCoord = aTexCoord;
-    gl_Position = aPosition;
+    vDepth = aDepth;
+    gl_Position = vec4(aPosition.xyz * aScale + aOffset, 1.0);
 }`;
 
 // FRAGMENT SHADER
@@ -17,16 +25,16 @@ const fragmentShaderSource = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
-uniform sampler2D uSampler;
+uniform mediump sampler2DArray uSampler;
 
+in vec4 vColor;
 in vec2 vTexCoord;
-
+in float vDepth;
 out vec4 fragColor;
 
 void main()
 {
-    // Sample demo mix of textures
-    fragColor = texture(uSampler, vTexCoord);
+    fragColor = texture(uSampler, vec3(vTexCoord, vDepth));
 }`;
 
 // Load image asynchronously
@@ -36,31 +44,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         image.onload = () => resolve(image);
         image.src = src;
     });
-}
-
-function getSpriteUV(sprite: number, orientation: number): [number, number, number, number, number, number, number, number, number, number, number, number] {
-
-    const h = 64 / 4096;
-    const w = 64 / 4096;
-
-    // The sprite number (0 to 255) is the index of the 64x64 sprite in the 1024x1024 sprite sub-sheet
-    // The orientation is the index (0 to 15) of the 1024x1024 sprite sub-sheet in the 4096x4096 sprite sheet.
-
-    // Calculate in the 1024x1024 sprite sub-sheet and 
-    // add the offset of the 1024x1024 sprite sub-sheet in the 4096x4096 sprite sheet
-    const u = ((sprite % 16) * w) + (orientation % 4) * 0.25;
-    const v = (Math.floor(sprite / 16) * h) + Math.floor(orientation / 4) * 0.25;
-
-    return [
-        u, v + h,
-        u + w, v,
-        u, v,
-
-        u, v + h,
-        u + w, v + h,
-        u + w, v
-
-    ];
 }
 
 (async () => {
@@ -90,73 +73,84 @@ function getSpriteUV(sprite: number, orientation: number): [number, number, numb
 
     gl.useProgram(program);
 
+    // * Start Program *
 
-    const positionData = new Float32Array([
-        // Quad 1
-        -1, 0,
-        0, 1,
-        -1, 1,
-        -1, 0,
-        0, 0,
-        0, 1,
-        // Quad 2
-        0, 0,
-        1, 1,
-        0, 1,
-        0, 0,
-        1, 0,
-        1, 1,
-        // Quad 3
-        -1, -1,
-        0, 0,
-        -1, 0,
-        -1, -1,
-        0, -1,
-        0, 0,
-        // Quad 4
-        0, -1,
-        1, 0,
-        0, 0,
-        0, -1,
-        1, -1,
-        1, 0,
-    ]);
-
-    const image = await loadImage('images/alien.png');
-
-    // Flip Y not needed?
-    // gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-    const positionBuffer = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positionData, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
-
-    const texCoordData = new Float32Array(2 * 4 * 6);
-    const texCoordBuffer = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, texCoordData.byteLength, gl.DYNAMIC_DRAW);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(1);
-
-    // Set texture
-    texCoordData.set(getSpriteUV(120, 15), 0);
-    texCoordData.set(getSpriteUV(120, 0), 12);
-    texCoordData.set(getSpriteUV(120, 1), 24);
-    texCoordData.set(getSpriteUV(120, 2), 36);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, texCoordData);
+    const image = await loadImage('images/plancher-vertical.png');
 
     const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4096, 4096, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA, 128, 128, 64, 0, gl.RGBA, gl.UNSIGNED_BYTE, image); // 64 textures of 128x128 pixels
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    // gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-    // Transparency
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    const modelData = new Float32Array([
+        // Position   texCoord
+        -1, -0.7, 0, 1,
+        0, 0.8, 0.5, 0,
+        1, -0.7, 1, 1,
+    ]);
 
-    // Draw call
-    gl.drawArrays(gl.TRIANGLES, 0, 24);
+    const transformData = new Float32Array([
+        // posX, posY, scale, colorR, colorG, colorB, depth
+        -0.2, 0.7, 0.1, 1, 0, 0, 0,
+        0.3, -0.5, 0.4, 0, 0, 1, 1,
+        -0.4, 0.2, 0.2, 1, 0, 1, 22,
+    ]);
+
+    const modelBuffer = gl.createBuffer(); // Create a buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
+    gl.bufferData(gl.ARRAY_BUFFER, modelData, gl.STATIC_DRAW); // Put data in the buffer
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0); // Describe the data in the buffer with a size of 2 because it's a 2D model, and a stride and offset of 0 because the data is tightly packed
+    gl.vertexAttribPointer(4, 2, gl.FLOAT, false, 16, 8);
+    gl.enableVertexAttribArray(0); // Enable the attribute which is bound to the buffer
+    gl.enableVertexAttribArray(4);
+
+    const transformBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
+    gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 28, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
+    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 28, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
+    gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 28, 12); // Describe the data in the buffer, the color (after 12 bytes of the 2 floats for x and y and the 1 float for scale)
+    gl.vertexAttribPointer(5, 1, gl.FLOAT, false, 28, 24); // Describe the data in the buffer, the color (after 12 bytes of the 2 floats for x and y and the 1 float for scale)
+
+    gl.vertexAttribDivisor(1, 1); // Tell the GPU to update the position attribute every instance
+    gl.vertexAttribDivisor(2, 1); // Tell the GPU to update the scale attribute every instance
+    gl.vertexAttribDivisor(3, 1); // Tell the GPU to update the color attribute every instance
+    gl.vertexAttribDivisor(5, 1); // Tell the GPU to update the color attribute every instance
+
+    gl.enableVertexAttribArray(1); // Enable the attribute
+    gl.enableVertexAttribArray(2); // Enable the attribute
+    gl.enableVertexAttribArray(3); // Enable the attribute
+    gl.enableVertexAttribArray(5); // Enable the attribute
+
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 3);
+
+    // * End Program *
+
+    // for (let i = 0; i < transformData.length; i += 6) {
+    //     gl.vertexAttrib2fv(1, transformData.slice(i, i + 2));
+    //     gl.vertexAttrib1fv(2, transformData.slice(i + 2, i + 3));
+    //     gl.vertexAttrib3fv(3, transformData.slice(i + 3, i + 6));
+
+    //     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // }
+
+    // gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8 * 4, 0);
+    // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 8 * 4, 8);
+    // gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 8 * 4, 16);
+    // gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 8 * 4, 20);
+
+    // gl.enableVertexAttribArray(0);
+    // gl.enableVertexAttribArray(1);
+    // gl.enableVertexAttribArray(2);
+    // gl.enableVertexAttribArray(3);
+
+    // // Transparency
+    // gl.enable(gl.BLEND);
+    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // // Draw call
+    // gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 })();
+
