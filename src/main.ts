@@ -50,10 +50,37 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         image.src = src;
     });
 }
+
+
 (async () => {
+
+    let counter = 0;
+
+    function loop(timestamp: number): void {
+        // gl.clearColor(0.0, 0.0, 0.0, 1.0); // opaque black
+        gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent black
+
+        // Clear the canvas
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Redraw the sprites
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 3);
+
+        // Request the next frame
+        requestAnimationFrame(loop);
+
+        counter++;
+
+        if (counter % 60 == 0) {
+            console.log('Frames so far:', counter);
+        }
+    }
 
     const canvas = document.querySelector('canvas')!;
     const gl = canvas.getContext('webgl2')!;
+    gl.enable(gl.BLEND);
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     const program = gl.createProgram()!;
 
@@ -113,7 +140,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         // posX, posY, scale,  colorR, colorG, colorB, U(frame, orientation), V(frame, orientation). Usually set by game engine. 8 floats for a stride of 32 bytes.
         0, 0, 64, 0, 1.5, 0, u(0, 0), v(0, 0),// Green Test at origin
         200, 150, 128, 0, 0, 1, u(0, 1), v(0, 1), // Blue Test at center
-        380, 280, 32, 1, 0, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
+        220, 160, 128, 0, 0, 1, u(3, 1), v(3, 1), // Blue Test at center
+        380, 280, 32, 1, 1, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
     ]);
 
     const modelBuffer = gl.createBuffer(); // Create a buffer
@@ -143,5 +171,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     // * End Program *
 
+    // Start the animation loop
+    requestAnimationFrame(loop);
 })();
 
