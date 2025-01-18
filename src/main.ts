@@ -5,14 +5,25 @@ layout(location=0) in vec4 aPosition;
 layout(location=1) in vec2 aTexCoord;
 layout(location=2) in vec3 aOffset;
 layout(location=3) in float aScale;
-layout(location=4) in vec2 aUV;
+layout(location=4) in vec4 aColor;
+layout(location=5) in vec2 aUV;
 
+uniform float uWorldX;
+uniform float uWorldY;
+
+out vec4 vColor;
 out vec2 vTexCoord;
 
 void main()
 {
+    vColor = aColor;
     vTexCoord = vec2(aTexCoord * 0.015625) + aUV;
-    gl_Position = vec4(aPosition.xyz * aScale + aOffset, 1.0);
+    // gl_Position = vec4(aPosition.xyz * aScale + aOffset, 1.0);
+    vec3 pos = aPosition.xyz * aScale + aOffset;
+    // uWorldX and uWorldY are factors for the x and y coordinates to convert from screen space to world space
+    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion by subtracting 1.
+    gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
+
 }`;
 
 // FRAGMENT SHADER
@@ -22,13 +33,13 @@ precision mediump float;
 
 uniform mediump sampler2D uSampler;
 
+in vec4 vColor;
 in vec2 vTexCoord;
-
 out vec4 fragColor;
 
 void main()
 {
-    fragColor = texture(uSampler, vTexCoord);
+    fragColor = vColor * texture(uSampler, vTexCoord);
 }`;
 
 // Load image asynchronously
@@ -75,15 +86,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4096, 4096, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
     gl.generateMipmap(gl.TEXTURE_2D);
 
+    const GameScreenX = 400;
+    const GameScreenY = 300;
+
+    const uWorldXLoc = gl.getUniformLocation(program, 'uWorldX')!;
+    gl.uniform1f(uWorldXLoc, 2 / GameScreenX);
+
+    const uWorldYLoc = gl.getUniformLocation(program, 'uWorldY')!;
+    gl.uniform1f(uWorldYLoc, 2 / -GameScreenY);
+
     const modelData = new Float32Array([
-        // XY Coords, UV Offset to be multiplied by 0.015625 and added to the UV coordinates
-        -1, 0, 0, 1,
-        0, 1, 1, 0,
-        -1, 1, 0, 0,
-        // XY   UV
-        -1, 0, 0, 1,
-        0, 0, 1, 1,
-        0, 1, 1, 0,
+        // XY Coords, UV Offset 
+        1, 0, 1, 0,
+        0, 1, 0, 1,
+        1, 1, 1, 1,
+        1, 0, 1, 0,
+        0, 0, 0, 0,
+        0, 1, 0, 1,
     ]);
 
     const u = (sprite: number, orientation: number) => { return ((sprite % 16) * 0.015625) + (orientation % 4) * 0.25; }
@@ -91,10 +110,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const v = (sprite: number, orientation: number) => { return (Math.floor(sprite / 16) * 0.015625) + Math.floor(orientation / 4) * 0.25; }
 
     const transformData = new Float32Array([
-        // posX, posY, scale, U(frame, orientation), V(frame, orientation) Usually set by game engine.
-        0.2, -0.5, 1.5, u(0, 0), v(0, 0),
-        0.2, 0.5, 0.3, u(0, 1), v(0, 1),
-        0.4, 0.2, 0.1, u(1, 1), v(1, 1),
+        // posX, posY, scale,  colorR, colorG, colorB, U(frame, orientation), V(frame, orientation). Usually set by game engine. 8 floats for a stride of 32 bytes.
+        0, 0, 64, 0, 1.5, 0, u(0, 0), v(0, 0),// Green Test at origin
+        200, 150, 128, 0, 0, 1, u(0, 1), v(0, 1), // Blue Test at center
+        380, 280, 32, 1, 0, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
     ]);
 
     const modelBuffer = gl.createBuffer(); // Create a buffer
@@ -108,9 +127,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const transformBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
     gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 20, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
-    gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 20, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
-    gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 20, 12); // Describe the data in the buffer
+    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 32, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
+    gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 32, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
+    gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 32, 12); // Describe the data in the buffer
 
     gl.vertexAttribDivisor(2, 1); // Tell the GPU to update the position attribute every instance
     gl.vertexAttribDivisor(3, 1); // Tell the GPU to update the scale attribute every instance
@@ -123,31 +142,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 3);
 
     // * End Program *
-
-    // for (let i = 0; i < transformData.length; i += 6) {
-    //     gl.vertexAttrib2fv(1, transformData.slice(i, i + 2));
-    //     gl.vertexAttrib1fv(2, transformData.slice(i + 2, i + 3));
-    //     gl.vertexAttrib3fv(3, transformData.slice(i + 3, i + 6));
-
-    //     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    // }
-
-    // gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8 * 4, 0);
-    // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 8 * 4, 8);
-    // gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 8 * 4, 16);
-    // gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 8 * 4, 20);
-
-    // gl.enableVertexAttribArray(0);
-    // gl.enableVertexAttribArray(1);
-    // gl.enableVertexAttribArray(2);
-    // gl.enableVertexAttribArray(3);
-
-    // // Transparency
-    // gl.enable(gl.BLEND);
-    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    // // Draw call
-    // gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 })();
 
