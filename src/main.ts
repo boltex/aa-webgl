@@ -63,6 +63,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         // Clear the canvas
         gl.clear(gl.COLOR_BUFFER_BIT);
 
+        // Update the posX coordinate of the first sprite
+        transformData[0] += 1;
+        if (transformData[0] > 400) {
+            transformData[0] = 0;
+        }
+
+        // Update the buffer data with the new transformData
+        gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.STATIC_DRAW);
+
         // Redraw the sprites
         gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 3);
 
@@ -140,7 +149,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         // posX, posY, scale,  colorR, colorG, colorB, U(frame, orientation), V(frame, orientation). Usually set by game engine. 8 floats for a stride of 32 bytes.
         0, 0, 64, 0, 1.5, 0, u(0, 0), v(0, 0),// Green Test at origin
         200, 150, 128, 0, 0, 1, u(0, 1), v(0, 1), // Blue Test at center
-        220, 160, 128, 0, 0, 1, u(3, 1), v(3, 1), // Blue Test at center
         380, 280, 32, 1, 1, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
     ]);
 
@@ -154,7 +162,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const transformBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
-    gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, transformData, gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
     gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 32, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
     gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 32, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
     gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 32, 12); // Describe the data in the buffer
