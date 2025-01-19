@@ -1,3 +1,5 @@
+type Vec2 = { x: number, y: number };
+
 // BACKGROUND MAP VERTEX SHADER
 const TILE_VERTEX_SHADER = /*glsl*/ `#version 300 es
 
@@ -67,8 +69,9 @@ void main()
 {
     vColor = aColor;
     vTexCoord = vec2(aTexCoord * 0.015625) + aUV;
-    // gl_Position = vec4(aPosition.xyz * aScale + aOffset, 1.0);
+
     vec3 pos = aPosition.xyz * aScale + aOffset;
+
     // uWorldX and uWorldY are factors for the x and y coordinates to convert from screen space to world space
     // This brings it in the range 0-2. So it also needs a -1 to 1 conversion by subtracting 1.
     gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
@@ -91,6 +94,23 @@ void main()
     fragColor = vColor * texture(uSampler, vTexCoord);
 }`;
 
+const MODEL_DATA = new Float32Array([
+    // XY Coords, UV Offset 
+    1, 0, 1, 0,
+    0, 1, 0, 1,
+    1, 1, 1, 1,
+    1, 0, 1, 0,
+    0, 0, 0, 0,
+    0, 1, 0, 1,
+]);
+
+const CONFIG = {
+    GAME_SCREEN_X: 400,
+    GAME_SCREEN_Y: 300,
+    TEXTURE_SIZE: 128,
+    TEXTURE_DEPTH: 64,
+} as const;
+
 // Load image asynchronously
 function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
@@ -99,7 +119,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         image.src = src;
     });
 }
-
 
 (async () => {
 
@@ -124,13 +143,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         // Render background tiles first
         tileRenderer.render();
 
+        // Update the sprite position every frame demonstrating the dynamic nature of the sprite renderer
+        spriteRenderer.updateTransform(0, { x: Math.sin(timestamp / 1000) * 100 + 100, y: Math.cos(timestamp / 1000) * 100 + 100 });
+
         // Then render sprites on top
         spriteRenderer.render();
 
         requestAnimationFrame(loop);
 
+        // Console output just to make sure this is running.
         counter++;
-
         if (counter % 60 == 0) {
             console.log('Frames so far:', counter);
         }
@@ -170,10 +192,18 @@ export abstract class BaseRenderer {
         const shader = this.gl.createShader(type)!;
         this.gl.shaderSource(shader, source);
         this.gl.compileShader(shader);
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+            console.error(this.gl.getShaderInfoLog(shader));
+            throw new Error('Shader compilation failed');
+        }
         return shader;
     }
 
     abstract render(): void;
+    dispose(): void {
+        this.gl.deleteProgram(this.program);
+        this.gl.deleteVertexArray(this.vao);
+    }
 }
 
 export class TileRenderer extends BaseRenderer {
@@ -198,7 +228,6 @@ export class TileRenderer extends BaseRenderer {
             380, 280, 32, 1, 0, 1, 22,   // Purple Test at bottom right
         ]);
 
-
         this.setupVAO();
 
     }
@@ -207,33 +236,18 @@ export class TileRenderer extends BaseRenderer {
         this.gl.bindVertexArray(this.vao);
 
         this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.texture);
-        this.gl.texImage3D(this.gl.TEXTURE_2D_ARRAY, 0, this.gl.RGBA, 128, 128, 64, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image); // 64 textures of 128x128 pixels
+        this.gl.texImage3D(this.gl.TEXTURE_2D_ARRAY, 0, this.gl.RGBA, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_DEPTH, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image); // 64 textures of 128x128 pixels
         this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
         this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
         this.gl.generateMipmap(this.gl.TEXTURE_2D_ARRAY);
 
-        const GameScreenX = 400;
-        const GameScreenY = 300;
-
         const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
-        this.gl.uniform1f(uWorldXLoc, 2 / GameScreenX);
+        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
 
         const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
-        this.gl.uniform1f(uWorldYLoc, 2 / -GameScreenY);
-
-        // Create a buffer for the model data of two triangles that form a rectangle
-        const modelData = new Float32Array([
-            // XY Coords, UV Offset 
-            1, 0, 1, 0,
-            0, 1, 0, 1,
-            1, 1, 1, 1,
-            1, 0, 1, 0,
-            0, 0, 0, 0,
-            0, 1, 0, 1,
-        ]);
+        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
 
         // Create a buffer for the transformation data of the three instances
-
         // Test data with posX and posY for a 400x300 resolution instead of -1 to 1.
         this.transformData = new Float32Array([
             // posX, posY, scale, colorR, colorG, colorB, depth. A stride of 28 bytes.
@@ -243,8 +257,8 @@ export class TileRenderer extends BaseRenderer {
         ]);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, modelData, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0); // Describe the data in the buffer with a size of 2 because it's a 2D model, and a stride of 16 bytes because there are 4 floats per vertex in modelData.
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
+        this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0); // Describe the data in the buffer with a size of 2 because it's a 2D model, and a stride of 16 bytes because there are 4 floats per vertex in MODEL_DATA.
         this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
         this.gl.enableVertexAttribArray(0); // Enable the attribute which is bound to the buffer
         this.gl.enableVertexAttribArray(1);
@@ -308,7 +322,6 @@ export class SpriteRenderer extends BaseRenderer {
             380, 280, 32, 1, 1, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
         ]);
 
-
         this.setupVAO();
 
     }
@@ -320,27 +333,14 @@ export class SpriteRenderer extends BaseRenderer {
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 4096, 4096, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
         this.gl.generateMipmap(this.gl.TEXTURE_2D);
 
-        const GameScreenX = 400;
-        const GameScreenY = 300;
-
         const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
-        this.gl.uniform1f(uWorldXLoc, 2 / GameScreenX);
+        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
 
         const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
-        this.gl.uniform1f(uWorldYLoc, 2 / -GameScreenY);
-
-        const modelData = new Float32Array([
-            // XY Coords, UV Offset 
-            1, 0, 1, 0,
-            0, 1, 0, 1,
-            1, 1, 1, 1,
-            1, 0, 1, 0,
-            0, 0, 0, 0,
-            0, 1, 0, 1,
-        ]);
+        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, modelData, this.gl.STATIC_DRAW); // Put data in the buffer
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
         this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0);  // XY
         this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8); // UV Offset
         this.gl.enableVertexAttribArray(0); // Enable the attribute which is bound to the buffer
@@ -374,9 +374,9 @@ export class SpriteRenderer extends BaseRenderer {
 
     }
 
-    updateTransform(index: number, x: number, y: number): void {
-        this.transformData[index * 8] = x;
-        this.transformData[index * 8 + 1] = y;
+    updateTransform(index: number, position: Vec2): void {
+        this.transformData[index * 8] = position.x;
+        this.transformData[index * 8 + 1] = position.y;
     }
 }
 
