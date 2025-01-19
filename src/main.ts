@@ -122,7 +122,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         // Render background tiles first
-        tileRenderer.render(); // TODO: Implement tile renderer
+        tileRenderer.render();
 
         // Then render sprites on top
         spriteRenderer.render();
