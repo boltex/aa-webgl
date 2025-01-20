@@ -1,5 +1,30 @@
 type Vec2 = { x: number, y: number };
 
+interface GLResources {
+    buffers: WebGLBuffer[];
+    textures: WebGLTexture[];
+    shaders: WebGLShader[];
+}
+
+type Color = {
+    r: number;
+    g: number;
+    b: number;
+};
+
+interface RenderableSprite {
+    position: Vec2;
+    scale: number;
+    color: Color;
+    frame: number;
+    orientation: number;
+}
+
+type SpriteUpdate = {
+    index: number;
+    properties: Partial<RenderableSprite>;
+};
+
 // BACKGROUND MAP VERTEX SHADER
 const TILE_VERTEX_SHADER = /*glsl*/ `#version 300 es
 
@@ -26,8 +51,7 @@ void main()
     vTexCoord = aTexCoord;
     vDepth = aDepth;
     vec3 pos = aPosition.xyz * aScale + aOffset;
-    // uWorldX and uWorldY are factors for the x and y coordinates to convert from screen space to world space
-    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion by subtracting 1.
+    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
     gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
 
 }`;
@@ -52,8 +76,11 @@ void main()
 // ALIEN CREATURE SPRITE VERTEX SHADER
 const SPRITE_VERTEX_SHADER = /*glsl*/ `#version 300 es
 
+// The next two are the repeated geometry and UV for each instance of the model
 layout(location=0) in vec4 aPosition;
 layout(location=1) in vec2 aTexCoord;
+
+// Those next four use vertexAttribDivisor and are updated every instance
 layout(location=2) in vec3 aOffset;
 layout(location=3) in float aScale;
 layout(location=4) in vec4 aColor;
@@ -72,8 +99,7 @@ void main()
 
     vec3 pos = aPosition.xyz * aScale + aOffset;
 
-    // uWorldX and uWorldY are factors for the x and y coordinates to convert from screen space to world space
-    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion by subtracting 1.
+    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
     gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
 
 }`;
@@ -124,6 +150,13 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const canvas = document.querySelector('canvas')!;
     const gl = canvas.getContext('webgl2')!;
+    if (!gl) {
+        throw new Error('WebGL2 not supported');
+    }
+    // Also check for required extensions
+    if (!gl.getExtension('EXT_color_buffer_float')) {
+        throw new Error('Required WebGL extensions not supported');
+    }
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent black
@@ -135,6 +168,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const tileRenderer = new TileRenderer(gl, tileImage);
     const spriteRenderer = new SpriteRenderer(gl, spriteImage);
 
+    window.addEventListener('unload', () => {
+        tileRenderer.dispose();
+        spriteRenderer.dispose();
+    });
+
     let counter = 0;
 
     function loop(timestamp: number): void {
@@ -144,7 +182,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         tileRenderer.render();
 
         // Update the sprite position every frame demonstrating the dynamic nature of the sprite renderer
-        spriteRenderer.updateTransform(0, { x: Math.sin(timestamp / 1000) * 100 + 100, y: Math.cos(timestamp / 1000) * 100 + 100 });
+        spriteRenderer.updateSprites([{
+            index: 0,
+            properties: {
+                position: {
+                    x: Math.sin(timestamp / 1000) * 100 + 100,
+                    y: Math.cos(timestamp / 1000) * 100 + 100
+                }
+            }
+        }]);
 
         // Then render sprites on top
         spriteRenderer.render();
@@ -164,10 +210,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 })();
 
-export abstract class BaseRenderer {
+abstract class BaseRenderer {
     protected gl: WebGL2RenderingContext;
     protected program: WebGLProgram;
     protected vao: WebGLVertexArrayObject;
+    protected resources: GLResources = {
+        buffers: [],
+        textures: [],
+        shaders: []
+    };
 
     constructor(gl: WebGL2RenderingContext, vertexShader: string, fragmentShader: string) {
         this.gl = gl;
@@ -190,6 +241,7 @@ export abstract class BaseRenderer {
 
     protected createShader(type: number, source: string): WebGLShader {
         const shader = this.gl.createShader(type)!;
+        this.resources.shaders.push(shader);
         this.gl.shaderSource(shader, source);
         this.gl.compileShader(shader);
         if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
@@ -199,14 +251,35 @@ export abstract class BaseRenderer {
         return shader;
     }
 
+    protected createBuffer(): WebGLBuffer {
+        const buffer = this.gl.createBuffer()!;
+        this.resources.buffers.push(buffer);
+        return buffer;
+    }
+
+    protected createTexture(): WebGLTexture {
+        const texture = this.gl.createTexture()!;
+        this.resources.textures.push(texture);
+        return texture;
+    }
+
     abstract render(): void;
     dispose(): void {
+        // Delete all resources in reverse order
+        this.resources.textures.forEach(texture => this.gl.deleteTexture(texture));
+        this.resources.buffers.forEach(buffer => this.gl.deleteBuffer(buffer));
+        this.resources.shaders.forEach(shader => this.gl.deleteShader(shader));
         this.gl.deleteProgram(this.program);
         this.gl.deleteVertexArray(this.vao);
+
+        // Clear arrays
+        this.resources.textures = [];
+        this.resources.buffers = [];
+        this.resources.shaders = [];
     }
 }
 
-export class TileRenderer extends BaseRenderer {
+class TileRenderer extends BaseRenderer {
     private transformBuffer: WebGLBuffer;
     private modelBuffer: WebGLBuffer;
     private transformData: Float32Array;
@@ -217,9 +290,9 @@ export class TileRenderer extends BaseRenderer {
         super(gl, TILE_VERTEX_SHADER, TILE_FRAGMENT_SHADER);
         // Move existing shader setup & buffer creation here
         this.image = image;
-        this.texture = gl.createTexture()!;
-        this.modelBuffer = gl.createBuffer()!; // Create a buffer
-        this.transformBuffer = gl.createBuffer()!;
+        this.texture = this.createTexture();
+        this.modelBuffer = this.createBuffer(); // Create a buffer
+        this.transformBuffer = this.createBuffer()!;
 
         this.transformData = new Float32Array([
             // posX, posY, scale, colorR, colorG, colorB, depth. A stride of 28 bytes.
@@ -298,29 +371,31 @@ export class TileRenderer extends BaseRenderer {
 
 }
 
-export class SpriteRenderer extends BaseRenderer {
+class SpriteRenderer extends BaseRenderer {
     private transformBuffer: WebGLBuffer;
     private modelBuffer: WebGLBuffer;
     private transformData: Float32Array;
     private image: HTMLImageElement
     private texture: WebGLTexture;
+    private dirtyTransforms = false;
+    private sprites: RenderableSprite[];
 
     constructor(gl: WebGL2RenderingContext, image: HTMLImageElement) {
         super(gl, SPRITE_VERTEX_SHADER, SPRITE_FRAGMENT_SHADER);
         // Move existing shader setup & buffer creation here
         this.image = image;
-        this.texture = gl.createTexture()!;
-        this.modelBuffer = gl.createBuffer()!; // Create a buffer
-        this.transformBuffer = gl.createBuffer()!;
+        this.texture = this.createTexture()!;
+        this.modelBuffer = this.createBuffer()!; // Create a buffer
+        this.transformBuffer = this.createBuffer()!;
+        this.transformData = new Float32Array(24); // 8 floats per sprite
 
-        const u = (sprite: number, orientation: number) => { return ((sprite % 16) * 0.015625) + (orientation % 4) * 0.25; }
-        const v = (sprite: number, orientation: number) => { return (Math.floor(sprite / 16) * 0.015625) + Math.floor(orientation / 4) * 0.25; }
-        this.transformData = new Float32Array([
-            // posX, posY, scale,  colorR, colorG, colorB, U(frame, orientation), V(frame, orientation). Usually set by game engine. 8 floats for a stride of 32 bytes.
-            0, 0, 64, 0, 1.5, 0, u(0, 0), v(0, 0),// Green Test at origin
-            200, 150, 128, 0, 0, 1, u(0, 1), v(0, 1), // Blue Test at center
-            380, 280, 32, 1, 1, 1, u(1, 1), v(1, 1),// Purple Test at bottom right
-        ]);
+        this.sprites = [
+            { position: { x: 0, y: 0 }, scale: 64, color: { r: 0, g: 1.5, b: 0 }, frame: 0, orientation: 0 },
+            { position: { x: 200, y: 150 }, scale: 128, color: { r: 0, g: 0, b: 1 }, frame: 22, orientation: 4 },
+            { position: { x: 380, y: 280 }, scale: 32, color: { r: 1, g: 1, b: 1 }, frame: 33, orientation: 7 }
+        ];
+
+        this.updateTransformData();
 
         this.setupVAO();
 
@@ -369,15 +444,39 @@ export class SpriteRenderer extends BaseRenderer {
         this.gl.bindVertexArray(this.vao);
 
         // Update the buffer with the new transform data and draw the sprites
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
+        if (this.dirtyTransforms) {
+            this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW);
+            this.dirtyTransforms = false;
+        }
         this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, 6, 3);
 
     }
 
-    updateTransform(index: number, position: Vec2): void {
-        this.transformData[index * 8] = position.x;
-        this.transformData[index * 8 + 1] = position.y;
+    private updateTransformData(): void {
+        const u = (sprite: number, orientation: number) => ((sprite % 16) * 0.015625) + (orientation % 4) * 0.25;
+        const v = (sprite: number, orientation: number) => (Math.floor(sprite / 16) * 0.015625) + Math.floor(orientation / 4) * 0.25;
+
+        this.sprites.forEach((sprite, i) => {
+            const offset = i * 8;
+            this.transformData[offset] = sprite.position.x;
+            this.transformData[offset + 1] = sprite.position.y;
+            this.transformData[offset + 2] = sprite.scale;
+            this.transformData[offset + 3] = sprite.color.r;
+            this.transformData[offset + 4] = sprite.color.g;
+            this.transformData[offset + 5] = sprite.color.b;
+            this.transformData[offset + 6] = u(sprite.frame, sprite.orientation);
+            this.transformData[offset + 7] = v(sprite.frame, sprite.orientation);
+        });
+        this.dirtyTransforms = true;
     }
+
+    updateSprites(updates: SpriteUpdate[]): void {
+        updates.forEach(({ index, properties }) => {
+            this.sprites[index] = { ...this.sprites[index], ...properties };
+        });
+        this.updateTransformData();
+    }
+
 }
 
 
