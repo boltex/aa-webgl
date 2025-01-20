@@ -38,8 +38,10 @@ layout(location=3) in float aScale;
 layout(location=4) in vec4 aColor;
 layout(location=5) in float aDepth;
 
-uniform float uWorldX;
-uniform float uWorldY;
+layout(std140) uniform World {
+    float uWorldX;
+    float uWorldY;
+};
 
 out vec4 vColor;
 out vec2 vTexCoord;
@@ -86,8 +88,10 @@ layout(location=3) in float aScale;
 layout(location=4) in vec4 aColor;
 layout(location=5) in vec2 aUV;
 
-uniform float uWorldX;
-uniform float uWorldY;
+layout(std140) uniform World {
+    float uWorldX;
+    float uWorldY;
+};
 
 out vec4 vColor;
 out vec2 vTexCoord;
@@ -168,6 +172,26 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const tileRenderer = new TileRenderer(gl, tileImage);
     const spriteRenderer = new SpriteRenderer(gl, spriteImage);
 
+    // Create a uniform buffer
+    const worldBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.UNIFORM_BUFFER, worldBuffer);
+    gl.bufferData(gl.UNIFORM_BUFFER, 2 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+
+    // Bind the buffer to binding point 0
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, worldBuffer);
+
+    // Set the uniform block binding for both programs
+    const tileProgram = tileRenderer.program;
+    const spriteProgram = spriteRenderer.program;
+    const worldIndex = 0; // Binding point 0
+
+    const tileBlockIndex = gl.getUniformBlockIndex(tileProgram, 'World');
+    gl.uniformBlockBinding(tileProgram, tileBlockIndex, worldIndex);
+
+    const spriteBlockIndex = gl.getUniformBlockIndex(spriteProgram, 'World');
+    gl.uniformBlockBinding(spriteProgram, spriteBlockIndex, worldIndex);
+
+
     window.addEventListener('unload', () => {
         tileRenderer.dispose();
         spriteRenderer.dispose();
@@ -177,6 +201,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     function loop(timestamp: number): void {
         gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Update the uniform buffer with the new values along with a small variation demonstrating the UBO is working.
+        const uboVariation = Math.sin(timestamp / 2000) * 100; // This will vary from -100 to 100
+        const worldData = new Float32Array([2 / (CONFIG.GAME_SCREEN_X + uboVariation), 2 / -(CONFIG.GAME_SCREEN_Y + uboVariation)]);
+        gl.bindBuffer(gl.UNIFORM_BUFFER, worldBuffer);
+        gl.bufferSubData(gl.UNIFORM_BUFFER, 0, worldData);
 
         // Render background tiles first
         tileRenderer.render();
@@ -212,7 +242,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 abstract class BaseRenderer {
     protected gl: WebGL2RenderingContext;
-    protected program: WebGLProgram;
+    public program: WebGLProgram;
     protected vao: WebGLVertexArrayObject;
     protected resources: GLResources = {
         buffers: [],
