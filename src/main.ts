@@ -25,6 +25,27 @@ type SpriteUpdate = {
     properties: Partial<RenderableSprite>;
 };
 
+enum ShaderAttribute {
+    POSITION = 0,
+    TEXCOORD = 1,
+    OFFSET = 2,
+    SCALE = 3,
+    COLOR = 4,
+    DEPTH = 5,
+    UV = 5
+}
+
+enum ShaderType {
+    VERTEX = WebGL2RenderingContext.VERTEX_SHADER,
+    FRAGMENT = WebGL2RenderingContext.FRAGMENT_SHADER
+}
+
+type WebGLError = {
+    type: 'shader' | 'program' | 'buffer' | 'texture';
+    message: string;
+    details?: string;
+}
+
 // BACKGROUND MAP VERTEX SHADER
 const TILE_VERTEX_SHADER = /*glsl*/ `#version 300 es
 
@@ -139,6 +160,20 @@ const CONFIG = {
     GAME_SCREEN_Y: 300,
     TEXTURE_SIZE: 128,
     TEXTURE_DEPTH: 64,
+    ATTRIBUTES: {
+        POSITION_SIZE: 2,
+        TEXCOORD_SIZE: 2,
+        OFFSET_SIZE: 2,
+        SCALE_SIZE: 1,
+        COLOR_SIZE: 3,
+        DEPTH_SIZE: 1
+    }
+} as const;
+
+const SPRITE_SHEET = {
+    SPRITES_PER_ROW: 16,
+    ORIENTATIONS_PER_ROW: 4,
+    UV_UNIT: 0.015625 // (1/64) Pre-calculated
 } as const;
 
 // Load image asynchronously
@@ -258,6 +293,7 @@ abstract class BaseRenderer {
 
     protected createProgram(vertexSource: string, fragmentSource: string): WebGLProgram {
         const program = this.gl.createProgram()!;
+        let errorLog = '';
         const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexSource)!;
         const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentSource)!;
 
@@ -265,10 +301,33 @@ abstract class BaseRenderer {
         this.gl.attachShader(program, fragmentShader);
         this.gl.linkProgram(program);
 
+        // Check linking status
+        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+            errorLog += `\nProgram linking failed: ${this.gl.getProgramInfoLog(program)}`;
+        }
+
+        // Validate program
+        this.gl.validateProgram(program);
+        if (!this.gl.getProgramParameter(program, this.gl.VALIDATE_STATUS)) {
+            errorLog += `\nProgram validation failed: ${this.gl.getProgramInfoLog(program)}`;
+        }
+
+        // Check if program can run in current WebGL state
+        const activeAttributes = this.gl.getProgramParameter(program, this.gl.ACTIVE_ATTRIBUTES);
+        const activeUniforms = this.gl.getProgramParameter(program, this.gl.ACTIVE_UNIFORMS);
+
+        if (activeAttributes === 0 && activeUniforms === 0) {
+            errorLog += '\nWarning: Program has no active attributes or uniforms';
+        }
+
+        if (errorLog) {
+            throw new Error(`WebGL Program creation failed: ${errorLog}`);
+        }
+
         return program;
     }
 
-    protected createShader(type: number, source: string): WebGLShader {
+    protected createShader(type: ShaderType, source: string): WebGLShader {
         const shader = this.gl.createShader(type)!;
         this.resources.shaders.push(shader);
         this.gl.shaderSource(shader, source);
@@ -290,6 +349,18 @@ abstract class BaseRenderer {
         const texture = this.gl.createTexture()!;
         this.resources.textures.push(texture);
         return texture;
+    }
+
+    protected setupAttribute(
+        location: ShaderAttribute,
+        size: number,
+        stride: number,
+        offset: number,
+        divisor: number = 0
+    ): void {
+        this.gl.vertexAttribPointer(location, size, this.gl.FLOAT, false, stride, offset);
+        this.gl.enableVertexAttribArray(location);
+        this.gl.vertexAttribDivisor(location, divisor);
     }
 
     abstract render(): void;
@@ -360,29 +431,15 @@ class TileRenderer extends BaseRenderer {
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0); // Describe the data in the buffer with a size of 2 because it's a 2D model, and a stride of 16 bytes because there are 4 floats per vertex in MODEL_DATA.
-        this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
-        this.gl.enableVertexAttribArray(0); // Enable the attribute which is bound to the buffer
-        this.gl.enableVertexAttribArray(1);
-        this.gl.vertexAttribDivisor(0, 0); // Model vertices - changes every vertex
-        this.gl.vertexAttribDivisor(1, 0); // Texture coords - changes every vertex
+        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
+        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
-        this.gl.vertexAttribPointer(2, 2, this.gl.FLOAT, false, 28, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
-        this.gl.vertexAttribPointer(3, 1, this.gl.FLOAT, false, 28, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
-        this.gl.vertexAttribPointer(4, 3, this.gl.FLOAT, false, 28, 12); // Describe the data in the buffer, the color (after 12 bytes of the 2 floats for x and y and the 1 float for scale)
-        this.gl.vertexAttribPointer(5, 1, this.gl.FLOAT, false, 28, 24); // Describe the data in the buffer, the depth (after 24 bytes of the 2 floats for x and y and the 1 float for scale and the 3 floats for color)
-
-        this.gl.vertexAttribDivisor(2, 1); // Tell the GPU to update the position attribute every instance
-        this.gl.vertexAttribDivisor(3, 1); // Tell the GPU to update the scale attribute every instance
-        this.gl.vertexAttribDivisor(4, 1); // Tell the GPU to update the color attribute every instance
-        this.gl.vertexAttribDivisor(5, 1); // Tell the GPU to update the depth attribute every instance
-
-        this.gl.enableVertexAttribArray(2); // Enable the attribute
-        this.gl.enableVertexAttribArray(3); // Enable the attribute
-        this.gl.enableVertexAttribArray(4); // Enable the attribute
-        this.gl.enableVertexAttribArray(5); // Enable the attribute
+        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
+        this.setupAttribute(ShaderAttribute.SCALE, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
+        this.setupAttribute(ShaderAttribute.COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 12, 1);
+        this.setupAttribute(ShaderAttribute.DEPTH, CONFIG.ATTRIBUTES.DEPTH_SIZE, 28, 24, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -445,24 +502,14 @@ class SpriteRenderer extends BaseRenderer {
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0);  // XY
-        this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8); // UV Offset
-        this.gl.enableVertexAttribArray(0); // Enable the attribute which is bound to the buffer
-        this.gl.enableVertexAttribArray(1);
+        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
+        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
-        this.gl.vertexAttribPointer(2, 2, this.gl.FLOAT, false, 32, 0); // Describe the data in the buffer: the x and y coordinates after no offset.
-        this.gl.vertexAttribPointer(3, 1, this.gl.FLOAT, false, 32, 8); // Describe the data in the buffer, the scale (after the 8 bytes of the 2 floats for x and y)
-        this.gl.vertexAttribPointer(4, 3, this.gl.FLOAT, false, 32, 12); // Describe the data in the buffer
-
-        this.gl.vertexAttribDivisor(2, 1); // Tell the GPU to update the position attribute every instance
-        this.gl.vertexAttribDivisor(3, 1); // Tell the GPU to update the scale attribute every instance
-        this.gl.vertexAttribDivisor(4, 1); // Tell the GPU to update the color attribute every instance
-
-        this.gl.enableVertexAttribArray(2); // Enable the attribute
-        this.gl.enableVertexAttribArray(3); // Enable the attribute
-        this.gl.enableVertexAttribArray(4); // Enable the attribute
+        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 32, 0, 1);
+        this.setupAttribute(ShaderAttribute.SCALE, CONFIG.ATTRIBUTES.SCALE_SIZE, 32, 8, 1);
+        this.setupAttribute(ShaderAttribute.COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 32, 12, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -482,8 +529,8 @@ class SpriteRenderer extends BaseRenderer {
     }
 
     private updateTransformData(): void {
-        const u = (sprite: number, orientation: number) => ((sprite % 16) * 0.015625) + (orientation % 4) * 0.25;
-        const v = (sprite: number, orientation: number) => (Math.floor(sprite / 16) * 0.015625) + Math.floor(orientation / 4) * 0.25;
+        const u = (sprite: number, orientation: number) => ((sprite % SPRITE_SHEET.SPRITES_PER_ROW) * SPRITE_SHEET.UV_UNIT) + (orientation % SPRITE_SHEET.ORIENTATIONS_PER_ROW) * 0.25;
+        const v = (sprite: number, orientation: number) => (Math.floor(sprite / SPRITE_SHEET.SPRITES_PER_ROW) * SPRITE_SHEET.UV_UNIT) + Math.floor(orientation / SPRITE_SHEET.ORIENTATIONS_PER_ROW) * 0.25;
 
         this.sprites.forEach((sprite, i) => {
             const offset = i * 8;
