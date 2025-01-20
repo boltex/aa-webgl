@@ -191,7 +191,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const spriteBlockIndex = gl.getUniformBlockIndex(spriteProgram, 'World');
     gl.uniformBlockBinding(spriteProgram, spriteBlockIndex, worldIndex);
 
-
     window.addEventListener('unload', () => {
         tileRenderer.dispose();
         spriteRenderer.dispose();
