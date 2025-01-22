@@ -145,6 +145,53 @@ void main()
     fragColor = vColor * texture(uSampler, vTexCoord);
 }`;
 
+// SELECTION LINE VERTEX SHADER
+const LINE_VERTEX_SHADER = /*glsl*/ `#version 300 es
+
+// The next two are the repeated geometry and UV for each instance of the model
+layout(location=0) in vec4 aPosition;
+layout(location=1) in vec2 aTexCoord;
+
+// Those next four use vertexAttribDivisor and are updated every instance
+layout(location=2) in vec3 aOffset;
+layout(location=3) in float aScaleX;
+layout(location=4) in float aScaleY;
+layout(location=5) in vec4 aColor;
+
+layout(std140) uniform World {
+    float uWorldX;
+    float uWorldY;
+};
+
+out vec4 vColor;
+out vec2 vTexCoord;
+
+void main()
+{
+    vColor = aColor;
+    vTexCoord = aTexCoord;
+    vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
+    // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
+    gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
+
+}`;
+
+// SELECTION LINE SPRITE FRAGMENT SHADER
+const LINE_FRAGMENT_SHADER = /*glsl*/ `#version 300 es
+
+precision mediump float;
+
+uniform mediump sampler2D uSampler;
+
+in vec4 vColor;
+in vec2 vTexCoord;
+out vec4 fragColor;
+
+void main()
+{
+    fragColor = vColor * texture(uSampler, vTexCoord);
+}`;
+
 const MODEL_DATA = new Float32Array([
     // XY Coords, UV Offset 
     1, 0, 1, 0,
