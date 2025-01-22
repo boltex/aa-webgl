@@ -32,7 +32,10 @@ enum ShaderAttribute {
     SCALE = 3,
     COLOR = 4,
     DEPTH = 5,
-    UV = 5
+    UV = 5,
+    LINE_SCALE_X = 3,
+    LINE_SCALE_Y = 4,
+    LINE_COLOR = 5
 }
 
 enum ShaderType {
@@ -170,7 +173,9 @@ void main()
 {
     vColor = aColor;
     vTexCoord = aTexCoord;
-    vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
+    // vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
+    vec3 pos = aPosition.xyz * aScaleX + aOffset;
+
     // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
     gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
 
@@ -251,8 +256,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const spriteImage = await loadImage('images/alien.png');
 
+    const lineImage = await loadImage('images/white.png');
+
     const tileRenderer = new TileRenderer(gl, tileImage);
     const spriteRenderer = new SpriteRenderer(gl, spriteImage);
+    const lineRenderer = new LineRenderer(gl, lineImage);
 
     // Create a uniform buffer
     const worldBuffer = gl.createBuffer();
@@ -265,6 +273,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     // Set the uniform block binding for both programs
     const tileProgram = tileRenderer.program;
     const spriteProgram = spriteRenderer.program;
+    const lineProgram = lineRenderer.program;
     const worldIndex = 0; // Binding point 0
 
     const tileBlockIndex = gl.getUniformBlockIndex(tileProgram, 'World');
@@ -273,9 +282,13 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const spriteBlockIndex = gl.getUniformBlockIndex(spriteProgram, 'World');
     gl.uniformBlockBinding(spriteProgram, spriteBlockIndex, worldIndex);
 
+    const lineBlockIndex = gl.getUniformBlockIndex(lineProgram, 'World');
+    gl.uniformBlockBinding(lineProgram, lineBlockIndex, worldIndex);
+
     window.addEventListener('unload', () => {
         tileRenderer.dispose();
         spriteRenderer.dispose();
+        // lineRenderer.dispose();
     });
 
     let counter = 0;
@@ -303,8 +316,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
             }
         }]);
 
-        // Then render sprites on top
+        // Then render sprites
         spriteRenderer.render();
+
+        // Render selection lines last
+        lineRenderer.render();
 
         requestAnimationFrame(loop);
 
@@ -472,7 +488,7 @@ class TileRenderer extends BaseRenderer {
         this.transformData = new Float32Array([
             // posX, posY, scale, colorR, colorG, colorB, depth. A stride of 28 bytes.
             0, 0, 64, 0, 1.5, 0, 0,      // Green Test at origin
-            200, 150, 128, 0, 0, 1, 1,    // Blue Test at center
+            300, 200, 128, 0, 0, 1, 1,    // Blue Test at center
             380, 280, 32, 1, 0, 1, 22,   // Purple Test at bottom right
         ]);
 
@@ -495,6 +511,8 @@ class TileRenderer extends BaseRenderer {
     render(): void {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
+
+        // bindTexture and bindBuffer not needed here because they are bound in the setupVAO function
 
         // Update the buffer with the new transform data and draw the sprites
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
@@ -565,9 +583,11 @@ class SpriteRenderer extends BaseRenderer {
     render(): void {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture); // This line is needed because the texture is unbound after the VAO is unbound
 
         // Update the buffer with the new transform data and draw the sprites
         if (this.dirtyTransforms) {
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Need to bind the buffer before updating it because it was unbound after the VAO was unbound
             this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW);
             this.dirtyTransforms = false;
         }
@@ -598,6 +618,77 @@ class SpriteRenderer extends BaseRenderer {
             this.sprites[index] = { ...this.sprites[index], ...properties };
         });
         this.updateTransformData();
+    }
+
+}
+
+class LineRenderer extends BaseRenderer {
+    private transformBuffer: WebGLBuffer;
+    private modelBuffer: WebGLBuffer;
+    private transformData: Float32Array;
+    private image: HTMLImageElement
+    private texture: WebGLTexture;
+
+    constructor(gl: WebGL2RenderingContext, image: HTMLImageElement) {
+        super(gl, LINE_VERTEX_SHADER, LINE_FRAGMENT_SHADER);
+        // Move existing shader setup & buffer creation here
+        this.image = image;
+        this.texture = this.createTexture();
+        this.modelBuffer = this.createBuffer(); // Create a buffer
+        this.transformBuffer = this.createBuffer()!;
+
+        this.transformData = new Float32Array([
+            // posX, posY, scaleX, scaleY, colorR, colorG, colorB. A stride of 28 bytes.
+            20, 20, 64, 2, 0, 1, 0,       // Green Test at origin
+            150, 100, 2, 32, 0, 1, 0,    // Blue Test at center
+            280, 180, 32, 2, 0, 1, 0,  // Purple Test at bottom right
+            // TODO : Add more to test negative scaling.
+        ]);
+
+        this.setupVAO();
+
+    }
+
+    private setupVAO() {
+        this.gl.bindVertexArray(this.vao);
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 1, 1, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
+        this.gl.generateMipmap(this.gl.TEXTURE_2D); // TODO : Make sure this is needed when drawing 'lines'!
+
+        const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
+        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
+
+        const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
+        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
+        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
+        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
+        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
+        this.setupAttribute(ShaderAttribute.LINE_SCALE_X, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
+        this.setupAttribute(ShaderAttribute.LINE_SCALE_Y, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 12, 1);
+        this.setupAttribute(ShaderAttribute.LINE_COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 16, 1);
+
+        this.gl.bindVertexArray(null); // All done, unbind the VAO
+
+    }
+
+    render(): void {
+        this.gl.useProgram(this.program);
+        this.gl.bindVertexArray(this.vao);
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer);
+
+        // Update the buffer with the new transform data and draw the sprites
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
+        this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, 6, 3); // Draw the model of 6 vertex that form 2 triangles, 3 times
+
     }
 
 }
