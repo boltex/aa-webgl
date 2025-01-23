@@ -173,9 +173,8 @@ void main()
 {
     vColor = aColor;
     vTexCoord = aTexCoord;
-    // vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
-    vec3 pos = aPosition.xyz * aScaleX + aOffset;
-
+    vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
+    
     // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
     gl_Position = vec4((pos.x * uWorldX) - 1.0, (pos.y * uWorldY) + 1.0, pos.z, 1.0);
 
