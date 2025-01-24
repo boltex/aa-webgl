@@ -33,9 +33,10 @@ enum ShaderAttribute {
     COLOR = 4,
     DEPTH = 5,
     UV = 5,
-    LINE_SCALE_X = 3,
-    LINE_SCALE_Y = 4,
-    LINE_COLOR = 5
+    LINE_OFFSET = 1,
+    LINE_SCALE_X = 2,
+    LINE_SCALE_Y = 3,
+    LINE_COLOR = 4
 }
 
 enum ShaderType {
@@ -149,17 +150,16 @@ void main()
 }`;
 
 // SELECTION LINE VERTEX SHADER
-const LINE_VERTEX_SHADER = /*glsl*/ `#version 300 es
+const RECTANGLE_VERTEX_SHADER = /*glsl*/ `#version 300 es
 
 // The next two are the repeated geometry and UV for each instance of the model
 layout(location=0) in vec4 aPosition;
-layout(location=1) in vec2 aTexCoord;
 
 // Those next four use vertexAttribDivisor and are updated every instance
-layout(location=2) in vec3 aOffset;
-layout(location=3) in float aScaleX;
-layout(location=4) in float aScaleY;
-layout(location=5) in vec4 aColor;
+layout(location=1) in vec3 aOffset;
+layout(location=2) in float aScaleX;
+layout(location=3) in float aScaleY;
+layout(location=4) in vec4 aColor;
 
 layout(std140) uniform World {
     float uWorldX;
@@ -167,12 +167,10 @@ layout(std140) uniform World {
 };
 
 out vec4 vColor;
-out vec2 vTexCoord;
 
 void main()
 {
     vColor = aColor;
-    vTexCoord = aTexCoord;
     vec3 pos = aPosition.xyz * vec3(aScaleX, aScaleY, 1.0) + aOffset;
     
     // This brings it in the range 0-2. So it also needs a -1 to 1 conversion.
@@ -181,19 +179,16 @@ void main()
 }`;
 
 // SELECTION LINE SPRITE FRAGMENT SHADER
-const LINE_FRAGMENT_SHADER = /*glsl*/ `#version 300 es
+const RECTANGLE_FRAGMENT_SHADER = /*glsl*/ `#version 300 es
 
 precision mediump float;
 
-uniform mediump sampler2D uSampler;
-
 in vec4 vColor;
-in vec2 vTexCoord;
 out vec4 fragColor;
 
 void main()
 {
-    fragColor = vColor * texture(uSampler, vTexCoord);
+    fragColor = vColor;
 }`;
 
 const MODEL_DATA = new Float32Array([
@@ -204,6 +199,16 @@ const MODEL_DATA = new Float32Array([
     1, 0, 1, 0,
     0, 0, 0, 0,
     0, 1, 0, 1,
+]);
+
+const RECTANGLE_MODEL_DATA = new Float32Array([
+    // XY Coords
+    1, 0,
+    0, 1,
+    1, 1,
+    1, 0,
+    0, 0,
+    0, 1,
 ]);
 
 const CONFIG = {
@@ -255,11 +260,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const spriteImage = await loadImage('images/alien.png');
 
-    const lineImage = await loadImage('images/white.png');
-
     const tileRenderer = new TileRenderer(gl, tileImage);
     const spriteRenderer = new SpriteRenderer(gl, spriteImage);
-    const lineRenderer = new LineRenderer(gl, lineImage);
+    const lineRenderer = new LineRenderer(gl);
 
     // Create a uniform buffer
     const worldBuffer = gl.createBuffer();
@@ -497,7 +500,7 @@ class TileRenderer extends BaseRenderer {
         this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates);
         this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
         this.setupAttribute(ShaderAttribute.SCALE, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
         this.setupAttribute(ShaderAttribute.COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 12, 1);
@@ -582,7 +585,7 @@ class SpriteRenderer extends BaseRenderer {
     render(): void {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture); // This line is needed because the texture is unbound after the VAO is unbound
+        // this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture); // This line is needed because the texture is unbound after the VAO is unbound
 
         // Update the buffer with the new transform data and draw the sprites
         if (this.dirtyTransforms) {
@@ -625,14 +628,10 @@ class LineRenderer extends BaseRenderer {
     private transformBuffer: WebGLBuffer;
     private modelBuffer: WebGLBuffer;
     private transformData: Float32Array;
-    private image: HTMLImageElement
-    private texture: WebGLTexture;
 
-    constructor(gl: WebGL2RenderingContext, image: HTMLImageElement) {
-        super(gl, LINE_VERTEX_SHADER, LINE_FRAGMENT_SHADER);
+    constructor(gl: WebGL2RenderingContext) {
+        super(gl, RECTANGLE_VERTEX_SHADER, RECTANGLE_FRAGMENT_SHADER);
         // Move existing shader setup & buffer creation here
-        this.image = image;
-        this.texture = this.createTexture();
         this.modelBuffer = this.createBuffer(); // Create a buffer
         this.transformBuffer = this.createBuffer()!;
 
@@ -651,10 +650,6 @@ class LineRenderer extends BaseRenderer {
     private setupVAO() {
         this.gl.bindVertexArray(this.vao);
 
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 1, 1, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
-        this.gl.generateMipmap(this.gl.TEXTURE_2D); // TODO : Make sure this is needed when drawing 'lines'!
-
         const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
         this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
 
@@ -662,13 +657,12 @@ class LineRenderer extends BaseRenderer {
         this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
-        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, RECTANGLE_MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
+        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 8, 0);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
-        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
+        this.setupAttribute(ShaderAttribute.LINE_OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
         this.setupAttribute(ShaderAttribute.LINE_SCALE_X, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
         this.setupAttribute(ShaderAttribute.LINE_SCALE_Y, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 12, 1);
         this.setupAttribute(ShaderAttribute.LINE_COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 16, 1);
@@ -681,7 +675,6 @@ class LineRenderer extends BaseRenderer {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
 
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer);
 
         // Update the buffer with the new transform data and draw the sprites
