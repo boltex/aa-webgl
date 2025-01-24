@@ -514,8 +514,6 @@ class TileRenderer extends BaseRenderer {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
 
-        // bindTexture and bindBuffer not needed here because they are bound in the setupVAO function
-
         // Update the buffer with the new transform data and draw the sprites
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
         this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, 6, 3); // Draw the model of 6 vertex that form 2 triangles, 3 times
@@ -587,7 +585,6 @@ class SpriteRenderer extends BaseRenderer {
     render(): void {
         this.gl.useProgram(this.program);
         this.gl.bindVertexArray(this.vao);
-        // this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture); // This line is needed because the texture is unbound after the VAO is unbound
 
         // Update the buffer with the new transform data and draw the sprites
         if (this.dirtyTransforms) {
