@@ -25,20 +25,6 @@ type SpriteUpdate = {
     properties: Partial<RenderableSprite>;
 };
 
-enum ShaderAttribute {
-    POSITION = 0,
-    TEXCOORD = 1,
-    OFFSET = 2,
-    SCALE = 3,
-    COLOR = 4,
-    DEPTH = 5,
-    UV = 5,
-    LINE_OFFSET = 1,
-    LINE_SCALE_X = 2,
-    LINE_SCALE_Y = 3,
-    LINE_COLOR = 4
-}
-
 enum ShaderType {
     VERTEX = WebGL2RenderingContext.VERTEX_SHADER,
     FRAGMENT = WebGL2RenderingContext.FRAGMENT_SHADER
@@ -245,19 +231,19 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const canvas = document.querySelector('canvas')!;
     const gl = canvas.getContext('webgl2')!;
+
     if (!gl) {
         throw new Error('WebGL2 not supported');
     }
-    // Also check for required extensions
     if (!gl.getExtension('EXT_color_buffer_float')) {
         throw new Error('Required WebGL extensions not supported');
     }
+
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent black
 
     const tileImage = await loadImage('images/plancher-vertical.png');
-
     const spriteImage = await loadImage('images/alien.png');
 
     const tileRenderer = new TileRenderer(gl, tileImage);
@@ -304,10 +290,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         gl.bindBuffer(gl.UNIFORM_BUFFER, worldBuffer);
         gl.bufferSubData(gl.UNIFORM_BUFFER, 0, worldData);
 
-        // Render background tiles first
-        tileRenderer.render();
-
-        // Update the sprite position every frame demonstrating the dynamic nature of the sprite renderer
+        tileRenderer.render(); // background tiles first...
         spriteRenderer.updateSprites([{
             index: 0,
             properties: {
@@ -317,12 +300,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
                 }
             }
         }]);
-
-        // Then render sprites
-        spriteRenderer.render();
-
-        // Render selection lines last
-        lineRenderer.render();
+        spriteRenderer.render(); // Then sprites, with changing positions demonstrating the dynamic nature of the sprite renderer
+        lineRenderer.render(); // Selection lines last.
 
         requestAnimationFrame(loop);
 
@@ -333,9 +312,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         }
     }
 
-    // Start the animation loop
-    requestAnimationFrame(loop);
-
+    requestAnimationFrame(loop); // Start the loop
 
 })();
 
@@ -366,25 +343,19 @@ abstract class BaseRenderer {
         this.gl.attachShader(program, fragmentShader);
         this.gl.linkProgram(program);
 
-        // Check linking status
+        // Error checking
         if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
             errorLog += `\nProgram linking failed: ${this.gl.getProgramInfoLog(program)}`;
         }
-
-        // Validate program
         this.gl.validateProgram(program);
         if (!this.gl.getProgramParameter(program, this.gl.VALIDATE_STATUS)) {
             errorLog += `\nProgram validation failed: ${this.gl.getProgramInfoLog(program)}`;
         }
-
-        // Check if program can run in current WebGL state
         const activeAttributes = this.gl.getProgramParameter(program, this.gl.ACTIVE_ATTRIBUTES);
         const activeUniforms = this.gl.getProgramParameter(program, this.gl.ACTIVE_UNIFORMS);
-
         if (activeAttributes === 0 && activeUniforms === 0) {
             errorLog += '\nWarning: Program has no active attributes or uniforms';
         }
-
         if (errorLog) {
             throw new Error(`WebGL Program creation failed: ${errorLog}`);
         }
@@ -417,7 +388,7 @@ abstract class BaseRenderer {
     }
 
     protected setupAttribute(
-        location: ShaderAttribute,
+        location: number,
         size: number,
         stride: number,
         offset: number,
@@ -496,15 +467,15 @@ class TileRenderer extends BaseRenderer {
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
-        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
+        this.setupAttribute(0, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
+        this.setupAttribute(1, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates);
-        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
-        this.setupAttribute(ShaderAttribute.SCALE, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
-        this.setupAttribute(ShaderAttribute.COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 12, 1);
-        this.setupAttribute(ShaderAttribute.DEPTH, CONFIG.ATTRIBUTES.DEPTH_SIZE, 28, 24, 1);
+        this.setupAttribute(2, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
+        this.setupAttribute(3, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
+        this.setupAttribute(4, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 12, 1);
+        this.setupAttribute(5, CONFIG.ATTRIBUTES.DEPTH_SIZE, 28, 24, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -569,14 +540,14 @@ class SpriteRenderer extends BaseRenderer {
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
-        this.setupAttribute(ShaderAttribute.TEXCOORD, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
+        this.setupAttribute(0, CONFIG.ATTRIBUTES.POSITION_SIZE, 16, 0);
+        this.setupAttribute(1, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 16, 8);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
-        this.setupAttribute(ShaderAttribute.OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 32, 0, 1);
-        this.setupAttribute(ShaderAttribute.SCALE, CONFIG.ATTRIBUTES.SCALE_SIZE, 32, 8, 1);
-        this.setupAttribute(ShaderAttribute.COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 32, 12, 1);
+        this.setupAttribute(2, CONFIG.ATTRIBUTES.OFFSET_SIZE, 32, 0, 1);
+        this.setupAttribute(3, CONFIG.ATTRIBUTES.SCALE_SIZE, 32, 8, 1);
+        this.setupAttribute(4, CONFIG.ATTRIBUTES.COLOR_SIZE, 32, 12, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -657,14 +628,14 @@ class RectangleRenderer extends BaseRenderer {
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, RECTANGLE_MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
-        this.setupAttribute(ShaderAttribute.POSITION, CONFIG.ATTRIBUTES.POSITION_SIZE, 8, 0);
+        this.setupAttribute(0, CONFIG.ATTRIBUTES.POSITION_SIZE, 8, 0);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.transformBuffer); // Bind the buffer (meaning "use this buffer for the following operations")
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.DYNAMIC_DRAW); // Change to DYNAMIC_DRAW to allow updates
-        this.setupAttribute(ShaderAttribute.LINE_OFFSET, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
-        this.setupAttribute(ShaderAttribute.LINE_SCALE_X, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
-        this.setupAttribute(ShaderAttribute.LINE_SCALE_Y, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 12, 1);
-        this.setupAttribute(ShaderAttribute.LINE_COLOR, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 16, 1);
+        this.setupAttribute(1, CONFIG.ATTRIBUTES.OFFSET_SIZE, 28, 0, 1);
+        this.setupAttribute(2, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 8, 1);
+        this.setupAttribute(3, CONFIG.ATTRIBUTES.SCALE_SIZE, 28, 12, 1);
+        this.setupAttribute(4, CONFIG.ATTRIBUTES.COLOR_SIZE, 28, 16, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -683,5 +654,4 @@ class RectangleRenderer extends BaseRenderer {
     }
 
 }
-
 
