@@ -262,7 +262,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
     const tileRenderer = new TileRenderer(gl, tileImage);
     const spriteRenderer = new SpriteRenderer(gl, spriteImage);
-    const lineRenderer = new LineRenderer(gl);
+    const lineRenderer = new RectangleRenderer(gl);
 
     // Create a uniform buffer
     const worldBuffer = gl.createBuffer();
@@ -475,8 +475,8 @@ class TileRenderer extends BaseRenderer {
 
         this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.texture);
         this.gl.texImage3D(this.gl.TEXTURE_2D_ARRAY, 0, this.gl.RGBA, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_DEPTH, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image); // 64 textures of 128x128 pixels
-        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
-        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
+        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
         this.gl.generateMipmap(this.gl.TEXTURE_2D_ARRAY);
 
         const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
@@ -559,6 +559,8 @@ class SpriteRenderer extends BaseRenderer {
 
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 4096, 4096, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
         this.gl.generateMipmap(this.gl.TEXTURE_2D);
 
         const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
@@ -624,7 +626,7 @@ class SpriteRenderer extends BaseRenderer {
 
 }
 
-class LineRenderer extends BaseRenderer {
+class RectangleRenderer extends BaseRenderer {
     private transformBuffer: WebGLBuffer;
     private modelBuffer: WebGLBuffer;
     private transformData: Float32Array;
