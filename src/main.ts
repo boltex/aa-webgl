@@ -276,7 +276,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     window.addEventListener('unload', () => {
         tileRenderer.dispose();
         spriteRenderer.dispose();
-        // lineRenderer.dispose();
+        lineRenderer.dispose();
     });
 
     let counter = 0;
@@ -446,24 +446,9 @@ class TileRenderer extends BaseRenderer {
 
         this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.texture);
         this.gl.texImage3D(this.gl.TEXTURE_2D_ARRAY, 0, this.gl.RGBA, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_DEPTH, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image); // 64 textures of 128x128 pixels
-        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
-        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
+        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
         this.gl.generateMipmap(this.gl.TEXTURE_2D_ARRAY);
-
-        const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
-        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
-
-        const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
-        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
-
-        // Create a buffer for the transformation data of the three instances
-        // Test data with posX and posY for a 400x300 resolution instead of -1 to 1.
-        this.transformData = new Float32Array([
-            // posX, posY, scale, colorR, colorG, colorB, depth. A stride of 28 bytes.
-            0, 0, 64, 0, 1.5, 0, 0,      // Green Test at origin
-            300, 200, 128, 0, 0, 1, 1,    // Blue Test at center
-            380, 280, 32, 1, 0, 1, 22,   // Purple Test at bottom right
-        ]);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
@@ -486,7 +471,7 @@ class TileRenderer extends BaseRenderer {
         this.gl.bindVertexArray(this.vao);
 
         // Update the buffer with the new transform data and draw the sprites
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
+        // this.gl.bufferData(this.gl.ARRAY_BUFFER, this.transformData, this.gl.STATIC_DRAW);
         this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, 6, 3); // Draw the model of 6 vertex that form 2 triangles, 3 times
 
     }
@@ -513,8 +498,8 @@ class SpriteRenderer extends BaseRenderer {
 
         this.sprites = [
             { position: { x: 0, y: 0 }, scale: 64, color: { r: 0, g: 1.5, b: 0 }, frame: 0, orientation: 0 },
-            { position: { x: 200, y: 150 }, scale: 128, color: { r: 0, g: 0, b: 1 }, frame: 22, orientation: 4 },
-            { position: { x: 380, y: 280 }, scale: 32, color: { r: 1, g: 1, b: 1 }, frame: 33, orientation: 7 }
+            { position: { x: 200, y: 150 }, scale: 128, color: { r: 0, g: 0, b: 1 }, frame: 212, orientation: 12 },
+            { position: { x: 380, y: 280 }, scale: 32, color: { r: 1, g: 1, b: 1 }, frame: 55, orientation: 4 }
         ];
 
         this.updateTransformData();
@@ -529,14 +514,8 @@ class SpriteRenderer extends BaseRenderer {
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 4096, 4096, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR_MIPMAP_LINEAR); // TODO : TRY MORE FILTERS
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR); // TODO : TRY MORE FILTERS
         this.gl.generateMipmap(this.gl.TEXTURE_2D);
-
-        const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
-        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
-
-        const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
-        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
@@ -548,6 +527,7 @@ class SpriteRenderer extends BaseRenderer {
         this.setupAttribute(2, CONFIG.ATTRIBUTES.OFFSET_SIZE, 32, 0, 1);
         this.setupAttribute(3, CONFIG.ATTRIBUTES.SCALE_SIZE, 32, 8, 1);
         this.setupAttribute(4, CONFIG.ATTRIBUTES.COLOR_SIZE, 32, 12, 1);
+        this.setupAttribute(5, CONFIG.ATTRIBUTES.TEXCOORD_SIZE, 32, 16, 1);
 
         this.gl.bindVertexArray(null); // All done, unbind the VAO
 
@@ -619,12 +599,6 @@ class RectangleRenderer extends BaseRenderer {
 
     private setupVAO() {
         this.gl.bindVertexArray(this.vao);
-
-        const uWorldXLoc = this.gl.getUniformLocation(this.program, 'uWorldX')!;
-        this.gl.uniform1f(uWorldXLoc, 2 / CONFIG.GAME_SCREEN_X);
-
-        const uWorldYLoc = this.gl.getUniformLocation(this.program, 'uWorldY')!;
-        this.gl.uniform1f(uWorldYLoc, 2 / -CONFIG.GAME_SCREEN_Y);
 
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.modelBuffer); // Bind the buffer (meaning "use this buffer" for the following operations)
         this.gl.bufferData(this.gl.ARRAY_BUFFER, RECTANGLE_MODEL_DATA, this.gl.STATIC_DRAW); // Put data in the buffer
