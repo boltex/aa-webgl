@@ -253,7 +253,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     // Create a uniform buffer
     const worldBuffer = gl.createBuffer();
     gl.bindBuffer(gl.UNIFORM_BUFFER, worldBuffer);
-    gl.bufferData(gl.UNIFORM_BUFFER, 2 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.UNIFORM_BUFFER, 16, gl.DYNAMIC_DRAW);
 
     // Bind the buffer to binding point 0
     gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, worldBuffer);
